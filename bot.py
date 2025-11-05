@@ -32,7 +32,7 @@ async def on_message(message: discord.Message):
     if (message.content.lower() == "asterion" or message.content.lower() == "astérion"):
         channel=message.channel
         author=message.author
-        await channel.send("{author}, tu ne peut pas dire ça.")
+        await channel.send(f"{author}, tu ne peut pas dire ça.")
 
 @bot.tree.command(name="youtube", description="Affiche la chaîne Akkun7")
 async def youtube(interaction: discord.Integration):
