@@ -81,6 +81,8 @@ async def say(interaction: discord.Integration, msg: str):
 @bot.event
 async def on_member_join(member: discord.Intents.members):
     welcome_channel = bot.get_channel(1227635256492949604)
+    logs_channel = bot.get_channel(1435730840691937301)
+    await logs_channel.send(f"{member} a rejoint le serveur.")
     await welcome_channel.send(f"Bienvenue à {member}")
 
 bot.run(os.getenv('DISCORD_TOKEN'))
