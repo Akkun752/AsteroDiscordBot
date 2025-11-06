@@ -70,4 +70,8 @@ async def embed(interaction: discord.Integration, titre: str, desc: str, soustit
 async def say(interaction: discord.Integration, msg: str):
     await interaction.response.send_message(msg)
 
+@bot.event
+async def on_member_join(member: discord.Intents.Member):
+    await welcome_channel.send(f"Bienvenue à {member}")
+
 bot.run(os.getenv('DISCORD_TOKEN'))
