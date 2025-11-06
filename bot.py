@@ -6,6 +6,7 @@ load_dotenv()
 
 print("Lancement du bot...")
 bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+
 welcome_channel = bot.get_channel(1227635256492949604)
 logs_channel = bot.get_channel(1435730840691937301)
 youtube_channel = bot.get_channel(1226934231259676834)
@@ -13,6 +14,7 @@ twitch_channel = bot.get_channel(1435706879077781706)
 
 @bot.event
 async def on_ready():
+
     print("Bot en route !")
 
     #synchroniser les commandes
@@ -40,17 +42,23 @@ async def youtube(interaction: discord.Integration):
 
 @bot.tree.command(name="warn", description="Alerte un membre")
 async def warn(interaction: discord.Integration, member: discord.Member):
+    logs_channel = bot.get_channel(1435730840691937301)
+    await logs_channel.send(f"{member} a reçu une alerte.")
     await interaction.response.send_message(f"{member} a reçu une alerte.")
     await member.send("Tu as reçu une alerte.")
 
 @bot.tree.command(name="ban", description="Bannir un membre")
 async def ban(interaction: discord.Integration, member: discord.Member):
+    logs_channel = bot.get_channel(1435730840691937301)
+    await logs_channel.send(f"{member} a été banni.")
     await member.send("Tu as été banni.")
     await member.ban(reason="Un modérateur a banni cet utilisateur.")
     await interaction.response.send_message(f"{member} a été banni.")
 
 @bot.tree.command(name="kick", description="Expulser un membre")
 async def kick(interaction: discord.Integration, member: discord.Member):
+    logs_channel = bot.get_channel(1435730840691937301)
+    await logs_channel.send(f"{member} a été expulsé.")
     await member.send("Tu as été expulsé.")
     await member.kick(reason="Un modérateur a expulé cet utilisateur.")
     await interaction.response.send_message(f"{member} a été expulsé.")
@@ -72,6 +80,7 @@ async def say(interaction: discord.Integration, msg: str):
 
 @bot.event
 async def on_member_join(member: discord.Intents.members):
+    welcome_channel = bot.get_channel(1227635256492949604)
     await welcome_channel.send(f"Bienvenue à {member}")
 
 bot.run(os.getenv('DISCORD_TOKEN'))
