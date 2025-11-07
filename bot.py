@@ -25,38 +25,41 @@ async def on_ready():
     except Exception as e:
         print(e)
 
-@bot.event
-async def on_message(message: discord.Message):
+#@bot.event
+#async def on_message(message: discord.Message):
 
-    if message.author.bot:
-        return
+#    if message.author.bot:
+#        return
 
-    if (message.content.lower() == "asterion" or message.content.lower() == "astérion"):
-        channel=message.channel
-        author=message.author
-        await channel.send(f"{author}, tu ne peut pas dire ça.")
+#    if (message.content.lower() == "asterion" or message.content.lower() == "astérion"):
+#        channel=message.channel
+#        author=message.author
+#        await channel.send(f"{author}, tu ne peut pas dire ça.")
 
-@bot.tree.command(name="youtube", description="Affiche la chaîne Akkun7")
-async def youtube(interaction: discord.Integration):
-    await interaction.response.send_message("Voici la chaîne Akkun7 : https://youtube.com/@Akkun7")
+@bot.tree.command(name="akkun", description="Affiche la chaîne Akkun7")
+async def akkun(interaction: discord.Integration):
+    await interaction.response.send_message("Voici la chaîne YouTube **Akkun7** : https://youtube.com/@Akkun7")
+    await interaction.response.send_message("Voici la chaîne YouTube **Akkun7 - VOD** : https://youtube.com/@Akkun7-VOD")
+    await interaction.response.send_message("Voici la chaîne YouTube **Corentin le Dev** : https://youtube.com/@CorentinLeDev")
+    await interaction.response.send_message("Voici la chaîne Twitch **Akkun752** : https://twitch.tv/akkun752")
 
-@bot.tree.command(name="warn", description="Alerte un membre")
-async def warn(interaction: discord.Integration, member: discord.Member):
+@bot.tree.command(name="awarn", description="Alerte un membre")
+async def awarn(interaction: discord.Integration, member: discord.Member):
     logs_channel = bot.get_channel(1435730840691937301)
     await logs_channel.send(f"{member} a reçu une alerte.")
     await interaction.response.send_message(f"{member} a reçu une alerte.")
     await member.send("Tu as reçu une alerte.")
 
-@bot.tree.command(name="ban", description="Bannir un membre")
-async def ban(interaction: discord.Integration, member: discord.Member):
+@bot.tree.command(name="aban", description="Bannir un membre")
+async def aban(interaction: discord.Integration, member: discord.Member):
     logs_channel = bot.get_channel(1435730840691937301)
     await logs_channel.send(f"{member} a été banni.")
     await member.send("Tu as été banni.")
     await member.ban(reason="Un modérateur a banni cet utilisateur.")
     await interaction.response.send_message(f"{member} a été banni.")
 
-@bot.tree.command(name="kick", description="Expulser un membre")
-async def kick(interaction: discord.Integration, member: discord.Member):
+@bot.tree.command(name="akick", description="Expulser un membre")
+async def akick(interaction: discord.Integration, member: discord.Member):
     logs_channel = bot.get_channel(1435730840691937301)
     await logs_channel.send(f"{member} a été expulsé.")
     await member.send("Tu as été expulsé.")
