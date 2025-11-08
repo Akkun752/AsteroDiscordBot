@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from discord.ext import commands
 import feedparser
 import asyncio
+import aiohttp
 
 # Charger les variables d'environnement (.env)
 load_dotenv()
@@ -50,11 +51,71 @@ async def check_youtube():
 
         await asyncio.sleep(300)  # Vérifie toutes les 5 minutes
 
+# Dernier statut connu du stream (True = en live, False = hors-ligne)
+is_live = False
+
+async def check_twitch():
+    await bot.wait_until_ready()
+    global is_live
+
+    twitch_user = "akkun752"
+    discord_channel = bot.get_channel(int(os.getenv("TW_AKKUN")))
+    client_id = os.getenv("TWITCH_CLIENT_ID")
+    client_secret = os.getenv("TWITCH_CLIENT_SECRET")
+
+    # Fonction pour obtenir un token d'accès
+    async def get_access_token():
+        async with aiohttp.ClientSession() as session:
+            url = f"https://id.twitch.tv/oauth2/token?client_id={client_id}&client_secret={client_secret}&grant_type=client_credentials"
+            async with session.post(url) as response:
+                data = await response.json()
+                return data.get("access_token")
+
+    access_token = await get_access_token()
+    headers = {
+        "Client-ID": client_id,
+        "Authorization": f"Bearer {access_token}"
+    }
+
+    while True:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://api.twitch.tv/helix/streams?user_login={twitch_user}", headers=headers) as response:
+                data = await response.json()
+
+                stream_data = data.get("data", [])
+                currently_live = bool(stream_data)
+
+                # Nouveau live détecté
+                if currently_live and not is_live:
+                    is_live = True
+                    stream_info = stream_data[0]
+                    title = stream_info["title"]
+                    game_name = stream_info.get("game_name", "Jeu inconnu")
+                    thumbnail_url = stream_info["thumbnail_url"].replace("{width}", "1280").replace("{height}", "720")
+                    twitch_url = f"https://twitch.tv/{twitch_user}"
+
+                    if discord_channel:
+                        embed = discord.Embed(
+                            title=f"# {title}",
+                            description=f"atégorie : {game_name}\n\n👉 [Venez nombreux !]({twitch_url})",
+                            color=discord.Color.purple()
+                        )
+                        embed.set_image(url=thumbnail_url)
+                        await discord_channel.send("||@everyone||", embed=embed)
+
+                # Live terminé
+                elif not currently_live and is_live:
+                    is_live = False
+                    if discord_channel:
+                        await discord_channel.send("🔴 Le live est terminé.")
+
+        await asyncio.sleep(180)  # Vérifie toutes les 3 minutes
 
 class MyBot(commands.Bot):
     async def setup_hook(self):
         # Ici on démarre la tâche en arrière-plan
         self.loop.create_task(check_youtube())
+        self.loop.create_task(check_twitch())
 
 # Créer le bot à partir de la classe personnalisée
 bot = MyBot(command_prefix="!", intents=discord.Intents.all())
@@ -83,18 +144,20 @@ async def akkun(interaction: discord.Interaction):
 # === Commande /awarn ===
 @bot.tree.command(name="awarn", description="Alerte un membre")
 async def awarn(interaction: discord.Interaction, member: discord.Member):
-    logs_channel = bot.get_channel(int(os.getenv("LOGS")))
-    if logs_channel:
-        await logs_channel.send(f"⚠️ {member.display_name} a reçu une alerte.")
+    if interaction.guild and interaction.guild.id == int(os.getenv("SERVEUR_AKKUN")):
+        logs_channel = bot.get_channel(int(os.getenv("LOGS")))
+        if logs_channel:
+            await logs_channel.send(f"⚠️ {member.display_name} a reçu une alerte.")
     await member.send("Tu as reçu une alerte.")
     await interaction.response.send_message(f"{member.display_name} a reçu une alerte.")
 
 # === Commande /aban ===
 @bot.tree.command(name="aban", description="Bannir un membre")
 async def aban(interaction: discord.Interaction, member: discord.Member):
-    logs_channel = bot.get_channel(int(os.getenv("LOGS")))
-    if logs_channel:
-        await logs_channel.send(f"⛔ {member.display_name} a été banni.")
+    if interaction.guild and interaction.guild.id == int(os.getenv("SERVEUR_AKKUN")):
+        logs_channel = bot.get_channel(int(os.getenv("LOGS")))
+        if logs_channel:
+            await logs_channel.send(f"⛔ {member.display_name} a été banni.")
     await member.send("Tu as été banni.")
     await member.ban(reason="Un modérateur a banni cet utilisateur.")
     await interaction.response.send_message(f"{member.display_name} a été banni.")
@@ -102,9 +165,10 @@ async def aban(interaction: discord.Interaction, member: discord.Member):
 # === Commande /akick ===
 @bot.tree.command(name="akick", description="Expulser un membre")
 async def akick(interaction: discord.Interaction, member: discord.Member):
-    logs_channel = bot.get_channel(int(os.getenv("LOGS")))
-    if logs_channel:
-        await logs_channel.send(f"🚪 {member.display_name} a été expulsé.")
+    if interaction.guild and interaction.guild.id == int(os.getenv("SERVEUR_AKKUN")):
+        logs_channel = bot.get_channel(int(os.getenv("LOGS")))
+        if logs_channel:
+            await logs_channel.send(f"🚪 {member.display_name} a été expulsé.")
     await member.send("Tu as été expulsé.")
     await member.kick(reason="Un modérateur a expulsé cet utilisateur.")
     await interaction.response.send_message(f"{member.display_name} a été expulsé.")
@@ -124,18 +188,25 @@ async def say(interaction: discord.Interaction, msg: str):
 # === Événement quand un membre rejoint ===
 @bot.event
 async def on_member_join(member: discord.Member):
-    welcome_channel = bot.get_channel(int(os.getenv("WELCOME")))
-    logs_channel = bot.get_channel(int(os.getenv("LOGS")))
-    if logs_channel:
-        await logs_channel.send(f"👋 {member.display_name} a rejoint le serveur.")
-    embed = discord.Embed(
-        title=f"Bienvenue {member.display_name} !",
-        description="Passe un agréable moment avec nous !",
-        color=discord.Color.orange()
-    )
-    embed.set_image(url="https://www.akkunverse.fr/astero/Astero-Welcome.png")
-    if welcome_channel:
-        await welcome_channel.send(embed=embed)
+    # Vérifie que l'événement vient du bon serveur
+    if member.guild and member.guild.id == int(os.getenv("SERVEUR_AKKUN")):
+        welcome_channel = bot.get_channel(int(os.getenv("WELCOME")))
+        logs_channel = bot.get_channel(int(os.getenv("LOGS")))
+
+        # Log dans le canal défini
+        if logs_channel:
+            await logs_channel.send(f"👋 {member.display_name} a rejoint le serveur.")
+
+        # Message de bienvenue
+        embed = discord.Embed(
+            title=f"Bienvenue {member.display_name} !",
+            description="Passe un agréable moment avec nous !",
+            color=discord.Color.orange()
+        )
+        embed.set_image(url="https://www.akkunverse.fr/astero/Astero-Welcome.png")
+
+        if welcome_channel:
+            await welcome_channel.send(embed=embed)
 
 #@bot.tree.command(name="arules", description="Créer l'Embed des règles")
 #async def arules(interaction: discord.Interaction):
