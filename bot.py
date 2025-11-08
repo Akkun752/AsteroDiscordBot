@@ -13,7 +13,11 @@ print("Lancement du bot...")
 #bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 variantes_poire = ["poire", "pear", "pera", "eriop", "birne", "🍐"]
-
+mots_interdits = [
+    "abruti", "fdp", "pute", "salope",
+    "batard", "ntm", "enculé", "connard", "putes",
+    "salopes", "batards", "nsm", "nique", "niquer", "abrutis", "enculés"
+]
 # Mapping des chaînes et salons
 yt_channels = {
     os.getenv("ID_AKKUN7"): int(os.getenv("YT_AKKUN")),  # Akkun7
@@ -49,7 +53,7 @@ async def check_youtube():
                         f"{latest_video.link}"
                     )
 
-        await asyncio.sleep(300)  # Vérifie toutes les 5 minutes
+        await asyncio.sleep(60)  # Vérifie toutes les 5 minutes
 
 # Dernier statut connu du stream (True = en live, False = hors-ligne)
 is_live = False
@@ -96,12 +100,12 @@ async def check_twitch():
 
                     if discord_channel:
                         embed = discord.Embed(
-                            title=f"# {title}",
-                            description=f"atégorie : {game_name}\n\n👉 [Venez nombreux !]({twitch_url})",
+                            title="Akkun est en direct !!",
+                            description=f"Catégorie : {game_name}\n\n👉 [Venez nombreux !]({twitch_url})",
                             color=discord.Color.purple()
                         )
                         embed.set_image(url=thumbnail_url)
-                        await discord_channel.send("||@everyone||", embed=embed)
+                        await discord_channel.send(f"||@everyone||\n# {title}", embed=embed)
 
                 # Live terminé
                 elif not currently_live and is_live:
@@ -109,7 +113,7 @@ async def check_twitch():
                     if discord_channel:
                         await discord_channel.send("🔴 Le live est terminé.")
 
-        await asyncio.sleep(180)  # Vérifie toutes les 3 minutes
+        await asyncio.sleep(60)  # Vérifie toutes les 3 minutes
 
 class MyBot(commands.Bot):
     async def setup_hook(self):
@@ -270,14 +274,39 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     if logs_channel:
         await logs_channel.send(f"❌🟡 Rôle {role.name} retiré à {member.display_name}")
 
-# Répond "Poire 🍐" quand un utilisateur dit "poire" ou variante
+# Répond "Poire 🍐" quand un utilisateur dit "poire" ou variante,
+# et filtre les messages interdits
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot:
         return
+
     msg = message.content.lower()
+
+    # --- Réponse "Poire 🍐" ---
     if any(var in msg for var in variantes_poire):
         await message.channel.send("Poire 🍐")
+
+    # --- Filtrage des mots interdits ---
+    mots_message = msg.split()
+    if any(mot in mots_interdits for mot in mots_message):
+        try:
+            await message.delete()
+        except discord.Forbidden:
+            print("❌ Impossible de supprimer le message (permissions manquantes).")
+            return
+
+        await message.channel.send(f"{message.author.display_name}, tu ne peux pas dire ça.", delete_after=5)
+        logs_channel = bot.get_channel(int(os.getenv("LOGS")))
+        if logs_channel:
+            embed = discord.Embed(
+                title=message.author.display_name,
+                description=message.content,
+                color=discord.Color.red()
+            )
+            embed.set_footer(text=f"Message supprimé dans #{message.channel.name}")
+            await logs_channel.send("🧹 Message supprimé", embed=embed)
+    await bot.process_commands(message)
 
 # === Lancer le bot ===
 bot.run(os.getenv("DISCORD_TOKEN"))
