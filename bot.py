@@ -2,14 +2,62 @@ import discord
 import os
 from dotenv import load_dotenv
 from discord.ext import commands
+import feedparser
+import asyncio
 
 # Charger les variables d'environnement (.env)
 load_dotenv()
 
 print("Lancement du bot...")
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+#bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 variantes_poire = ["poire", "pear", "pera", "eriop", "birne", "🍐"]
+
+# Mapping des chaînes et salons
+yt_channels = {
+    os.getenv("ID_AKKUN7"): int(os.getenv("YT_AKKUN")),  # Akkun7
+    os.getenv("ID_AKKUN7VOD"): int(os.getenv("YT_VOD")),  # Akkun7 - VOD
+    os.getenv("ID_CORENTINLEDEV"): int(os.getenv("YT_DEV"))   # Corentin le Dev
+}
+
+# Stocker la dernière vidéo publiée pour chaque chaîne
+last_video_ids = {}
+
+async def check_youtube():
+    await bot.wait_until_ready()
+    while True:
+        for channel_id, salon_id in yt_channels.items():
+            feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+            feed = feedparser.parse(feed_url)
+            if not feed.entries:
+                continue
+
+            latest_video = feed.entries[0]
+            video_id = latest_video.yt_videoid
+
+            # Si c'est une nouvelle vidéo
+            if last_video_ids.get(channel_id) != video_id:
+                last_video_ids[channel_id] = video_id
+                salon = bot.get_channel(salon_id)
+                if salon:
+                    # Ne mentionne pas everyone si c'est la chaîne VOD
+                    mention = "||@everyone||\n" if channel_id != os.getenv("ID_AKKUN7VOD") else ""
+                    await salon.send(
+                        f"{mention}"
+                        f"# {latest_video.title}\n"
+                        f"{latest_video.link}"
+                    )
+
+        await asyncio.sleep(300)  # Vérifie toutes les 5 minutes
+
+
+class MyBot(commands.Bot):
+    async def setup_hook(self):
+        # Ici on démarre la tâche en arrière-plan
+        self.loop.create_task(check_youtube())
+
+# Créer le bot à partir de la classe personnalisée
+bot = MyBot(command_prefix="!", intents=discord.Intents.all())
 
 # === Événement au démarrage ===
 @bot.event
@@ -32,7 +80,6 @@ async def akkun(interaction: discord.Interaction):
         "👾 Twitch : https://twitch.tv/akkun752"
     )
 
-
 # === Commande /awarn ===
 @bot.tree.command(name="awarn", description="Alerte un membre")
 async def awarn(interaction: discord.Interaction, member: discord.Member):
@@ -41,7 +88,6 @@ async def awarn(interaction: discord.Interaction, member: discord.Member):
         await logs_channel.send(f"⚠️ {member.display_name} a reçu une alerte.")
     await member.send("Tu as reçu une alerte.")
     await interaction.response.send_message(f"{member.display_name} a reçu une alerte.")
-
 
 # === Commande /aban ===
 @bot.tree.command(name="aban", description="Bannir un membre")
@@ -53,7 +99,6 @@ async def aban(interaction: discord.Interaction, member: discord.Member):
     await member.ban(reason="Un modérateur a banni cet utilisateur.")
     await interaction.response.send_message(f"{member.display_name} a été banni.")
 
-
 # === Commande /akick ===
 @bot.tree.command(name="akick", description="Expulser un membre")
 async def akick(interaction: discord.Interaction, member: discord.Member):
@@ -64,7 +109,6 @@ async def akick(interaction: discord.Interaction, member: discord.Member):
     await member.kick(reason="Un modérateur a expulsé cet utilisateur.")
     await interaction.response.send_message(f"{member.display_name} a été expulsé.")
 
-
 # === Commande /embed ===
 @bot.tree.command(name="embed", description="Créer un Embed")
 async def embed(interaction: discord.Interaction, titre: str, desc: str, soustitre: str, contenu: str):
@@ -72,12 +116,10 @@ async def embed(interaction: discord.Interaction, titre: str, desc: str, soustit
     embed.add_field(name=soustitre, value=contenu)
     await interaction.response.send_message(embed=embed)
 
-
 # === Commande /say ===
 @bot.tree.command(name="say", description="Faire parler le bot")
 async def say(interaction: discord.Interaction, msg: str):
     await interaction.response.send_message(msg)
-
 
 # === Événement quand un membre rejoint ===
 @bot.event
@@ -134,7 +176,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     logs_channel = bot.get_channel(int(os.getenv("LOGS")))
     if logs_channel:
         await logs_channel.send(f"✅🟡 Rôle {role.name} ajouté à {member.display_name}")
-
 
 # Retirer le rôle quand on retire la réaction
 @bot.event
