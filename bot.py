@@ -18,11 +18,14 @@ mots_interdits = [
     "batard", "ntm", "enculé", "connard", "putes",
     "salopes", "batards", "nsm", "nique", "niquer", "abrutis", "enculés"
 ]
-# Mapping des chaînes et salons
+# Mapping des chaînes et salons + mention à envoyer
 yt_channels = {
-    os.getenv("ID_AKKUN7"): int(os.getenv("YT_AKKUN")),  # Akkun7
-    os.getenv("ID_AKKUN7VOD"): int(os.getenv("YT_VOD")),  # Akkun7 - VOD
-    os.getenv("ID_CORENTINLEDEV"): int(os.getenv("YT_DEV"))   # Corentin le Dev
+    os.getenv("ID_AKKUN7"): (int(os.getenv("YT_AKKUN")), "everyone"),
+    os.getenv("ID_AKKUN7VOD"): (int(os.getenv("YT_VOD")), f"<@&{os.getenv('ROLE_NOTIF_TWITCH')}>"),
+    os.getenv("ID_CORENTINLEDEV"): (int(os.getenv("YT_DEV")), "everyone"),
+    os.getenv("ID_FALNIX"): (int(os.getenv("YT_FALNIX")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
+    os.getenv("ID_AKKUN7"): (int(os.getenv("YT_AKKUN_F")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE_F')}>"),
+    os.getenv("ID_FALNIX"): (int(os.getenv("YT_FALNIX_F")), "everyone")
 }
 
 # Stocker la dernière vidéo publiée pour chaque chaîne
@@ -31,7 +34,7 @@ last_video_ids = {}
 async def check_youtube():
     await bot.wait_until_ready()
     while True:
-        for channel_id, salon_id in yt_channels.items():
+        for channel_id, (salon_id, mention_type) in yt_channels.items():
             feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
             feed = feedparser.parse(feed_url)
             if not feed.entries:
@@ -40,20 +43,36 @@ async def check_youtube():
             latest_video = feed.entries[0]
             video_id = latest_video.yt_videoid
 
-            # Si c'est une nouvelle vidéo
             if last_video_ids.get(channel_id) != video_id:
                 last_video_ids[channel_id] = video_id
                 salon = bot.get_channel(salon_id)
                 if salon:
-                    # Ne mentionne pas everyone si c'est la chaîne VOD
-                    mention = "||@everyone||\n" if channel_id != os.getenv("ID_AKKUN7VOD") else ""
-                    await salon.send(
-                        f"{mention}"
-                        f"# {latest_video.title}\n"
-                        f"{latest_video.link}"
-                    )
+                    # Vérifie que la vidéo n’a pas déjà été postée dans le salon
+                    already_posted = False
+                    async for message in salon.history(limit=20):
+                        if latest_video.link in message.content:
+                            already_posted = True
+                            break
 
-        await asyncio.sleep(60)  # Vérifie toutes les 5 minutes
+                    if not already_posted:
+                        # Définir la mention
+                        if mention_type == "everyone":
+                            mention = "||@everyone||\n"
+                        elif mention_type == "none":
+                            mention = ""
+                        else:
+                            mention = f"||{mention_type}||\n"  # ID de rôle
+
+                        await salon.send(
+                            f"{mention}"
+                            f"# {latest_video.title}\n"
+                            f"{latest_video.link}"
+                        )
+                    else:
+                        print(f"⏩ Vidéo déjà postée dans {salon.name} : {latest_video.link}")
+
+        await asyncio.sleep(60)  # Vérifie toutes les 60 secondes
+
 
 # Dernier statut connu du stream (True = en live, False = hors-ligne)
 is_live = False
