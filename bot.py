@@ -5,6 +5,8 @@ from discord.ext import commands
 import feedparser
 import asyncio
 import aiohttp
+import json
+
 
 # Charger les variables d'environnement (.env)
 load_dotenv()
@@ -18,23 +20,41 @@ mots_interdits = [
     "batard", "ntm", "enculé", "connard", "putes",
     "salopes", "batards", "nsm", "nique", "niquer", "abrutis", "enculés"
 ]
-# Mapping des chaînes et salons + mention à envoyer
+
+# Mapping des chaîne
 yt_channels = {
-    os.getenv("ID_AKKUN7"): (int(os.getenv("YT_AKKUN")), "everyone"),
-    os.getenv("ID_AKKUN7VOD"): (int(os.getenv("YT_VOD")), f"<@&{os.getenv('ROLE_NOTIF_TWITCH')}>"),
-    os.getenv("ID_CORENTINLEDEV"): (int(os.getenv("YT_DEV")), "everyone"),
-    os.getenv("ID_FALNIX"): (int(os.getenv("YT_FALNIX")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
-    os.getenv("ID_AKKUN7"): (int(os.getenv("YT_AKKUN_F")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE_F')}>"),
-    os.getenv("ID_FALNIX"): (int(os.getenv("YT_FALNIX_F")), "everyone")
+    os.getenv("ID_AKKUN7"): [
+        (int(os.getenv("YT_AKKUN")), "everyone"),
+        (int(os.getenv("YT_AKKUN_F")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE_F')}>")
+    ],
+    os.getenv("ID_AKKUN7VOD"): [
+        (int(os.getenv("YT_VOD")), f"<@&{os.getenv('ROLE_NOTIF_TWITCH')}>")
+    ],
+    os.getenv("ID_CORENTINLEDEV"): [
+        (int(os.getenv("YT_DEV")), "everyone")
+    ],
+    os.getenv("ID_FALNIX"): [
+        (int(os.getenv("YT_FALNIX")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
+        (int(os.getenv("YT_FALNIX_F")), "everyone")
+    ]
 }
 
-# Stocker la dernière vidéo publiée pour chaque chaîne
-last_video_ids = {}
+
+# Charger les dernières vidéos depuis un fichier au lancement
+if os.path.exists("last_videos.json"):
+    with open("last_videos.json", "r", encoding="utf-8") as f:
+        try:
+            last_video_ids = json.load(f)
+        except json.JSONDecodeError:
+            last_video_ids = {}
+else:
+    last_video_ids = {}
+
 
 async def check_youtube():
     await bot.wait_until_ready()
     while True:
-        for channel_id, (salon_id, mention_type) in yt_channels.items():
+        for channel_id, salons in yt_channels.items():
             feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
             feed = feedparser.parse(feed_url)
             if not feed.entries:
@@ -43,35 +63,44 @@ async def check_youtube():
             latest_video = feed.entries[0]
             video_id = latest_video.yt_videoid
 
-            if last_video_ids.get(channel_id) != video_id:
-                last_video_ids[channel_id] = video_id
-                salon = bot.get_channel(salon_id)
-                if salon:
-                    # Vérifie que la vidéo n’a pas déjà été postée dans le salon
-                    already_posted = False
-                    async for message in salon.history(limit=20):
-                        if latest_video.link in message.content:
-                            already_posted = True
-                            break
+            # Initialise si la chaîne n’a pas encore d’entrée
+            if channel_id not in last_video_ids:
+                last_video_ids[channel_id] = {}
 
-                    if not already_posted:
-                        # Définir la mention
-                        if mention_type == "everyone":
-                            mention = "||@everyone||\n"
-                        elif mention_type == "none":
-                            mention = ""
+            # 🔁 Pour chaque salon associé à cette chaîne YouTube
+            for salon_id, mention_type in salons:
+                if last_video_ids[channel_id].get(str(salon_id)) != video_id:
+                    last_video_ids[channel_id][str(salon_id)] = video_id
+
+                    # Sauvegarde immédiate dans le fichier JSON
+                    with open("last_videos.json", "w", encoding="utf-8") as f:
+                        json.dump(last_video_ids, f, indent=2, ensure_ascii=False)
+
+                    salon = bot.get_channel(salon_id)
+                    if salon:
+                        # Vérifie que la vidéo n’a pas déjà été postée récemment
+                        already_posted = False
+                        async for message in salon.history(limit=20):
+                            if latest_video.link in message.content:
+                                already_posted = True
+                                break
+
+                        if not already_posted:
+                            # Définir la mention à envoyer
+                            mention = (
+                                "||@everyone||\n" if mention_type == "everyone"
+                                else ("" if mention_type == "none"
+                                else f"||{mention_type}||\n")
+                            )
+
+                            await salon.send(
+                                f"{mention}# {latest_video.title}\n{latest_video.link}"
+                            )
                         else:
-                            mention = f"||{mention_type}||\n"  # ID de rôle
+                            print(f"⏩ Vidéo déjà postée dans {salon.name} : {latest_video.link}")
 
-                        await salon.send(
-                            f"{mention}"
-                            f"# {latest_video.title}\n"
-                            f"{latest_video.link}"
-                        )
-                    else:
-                        print(f"⏩ Vidéo déjà postée dans {salon.name} : {latest_video.link}")
+        await asyncio.sleep(180)  # Vérifie toutes les 3 minutes
 
-        await asyncio.sleep(60)  # Vérifie toutes les 60 secondes
 
 
 # Dernier statut connu du stream (True = en live, False = hors-ligne)
