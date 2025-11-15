@@ -12,16 +12,44 @@ import json
 load_dotenv()
 
 print("Lancement du bot...")
-#bot = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 variantes_poire = ["poire", "pear", "pera", "eriop", "birne", "🍐"]
 mots_interdits = [
-    "abruti", "fdp", "pute", "salope",
-    "batard", "ntm", "enculé", "connard", "putes",
-    "salopes", "batards", "nsm", "nique", "niquer", "abrutis", "enculés"
+    "abruti",
+    "fdp",
+    "pute",
+    "salope",
+    "batard",
+    "ntm",
+    "enculé",
+    "connard",
+    "connards",
+    "putes",
+    "salopes",
+    "batards",
+    "nsm",
+    "nique",
+    "niquer",
+    "abrutis",
+    "enculés",
+    "niquez",
+    "niques"
 ]
 
-# Mapping des chaîne
+# Dictionnaire des emojis → rôles
+EMOJI_ROLE_MAP = {
+    "🔔": int(os.getenv("ROLE_NOTIF_TWITCH")),
+    "👥": int(os.getenv("ROLE_NOTIF_COLLEGUE")),
+    "✅": int(os.getenv("ROLE_MEMBRE")),
+}
+
+# Dictionnaire des messages → emojis autorisés
+MESSAGE_EMOJIS = {
+    int(os.getenv("MSG_REGLES")): ["✅"],
+    int(os.getenv("MSG_ROLE")): ["🔔", "👥"],
+}
+
+# Mapping des chaînes YouTube
 yt_channels = {
     os.getenv("ID_AKKUN7"): [
         (int(os.getenv("YT_AKKUN")), "everyone"),
@@ -63,7 +91,7 @@ async def check_youtube():
             latest_video = feed.entries[0]
             video_id = latest_video.yt_videoid
 
-            # Initialise si la chaîne n’a pas encore d’entrée
+            # Initialise si la chaîne n'a pas encore d'entrée
             if channel_id not in last_video_ids:
                 last_video_ids[channel_id] = {}
 
@@ -78,7 +106,7 @@ async def check_youtube():
 
                     salon = bot.get_channel(salon_id)
                     if salon:
-                        # Vérifie que la vidéo n’a pas déjà été postée récemment
+                        # Vérifie que la vidéo n'a pas déjà été postée récemment
                         already_posted = False
                         async for message in salon.history(limit=20):
                             if latest_video.link in message.content:
@@ -161,7 +189,7 @@ async def check_twitch():
                     if discord_channel:
                         await discord_channel.send("🔴 Le live est terminé.")
 
-        await asyncio.sleep(60)  # Vérifie toutes les 3 minutes
+        await asyncio.sleep(60)  # Vérifie toutes les minutes
 
 class MyBot(commands.Bot):
     async def setup_hook(self):
@@ -191,6 +219,25 @@ async def akkun(interaction: discord.Interaction):
         "🎬 YouTube VOD : https://youtube.com/@Akkun7VOD\n"
         "💻 Corentin le Dev : https://youtube.com/@CorentinLeDev\n"
         "👾 Twitch : https://twitch.tv/akkun752"
+    )
+
+# === Commande /falnix ===
+@bot.tree.command(name="falnix", description="Affiche les chaînes Falnix")
+async def falnix(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        "**Les chaînes de Falnix :**\n"
+        "🎥 YouTube : https://youtube.com/@Falnix\n"
+        "👾 Twitch : https://twitch.tv/falnix_"
+    )
+
+# === Commande /raphaaile ===
+@bot.tree.command(name="raphaaile", description="Affiche les chaînes Rapha_Aile")
+async def raphaaile(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        "**Les chaînes de Rapha_Aile :**\n"
+        "👾 Twitch : https://twitch.tv/rapha_aile_\n"
+        "🎥 YouTube : https://youtube.com/@raphaaile\n"
+        "🎬 YouTube VOD : https://youtube.com/@RaphaAileVOD"
     )
 
 # === Commande /awarn ===
@@ -260,70 +307,105 @@ async def on_member_join(member: discord.Member):
         if welcome_channel:
             await welcome_channel.send(embed=embed)
 
-#@bot.tree.command(name="arules", description="Créer l'Embed des règles")
-#async def arules(interaction: discord.Interaction):
-#    embed = discord.Embed(
-#        title="📜 Règles du Discord 📜",
-#        description="📜 Règles du Serveur\n\n"
-#        "Bienvenue sur mon serveur Discord ! Pour garantir une expérience agréable pour tous, merci de bien respecter les règles suivantes :\n\n"
-#        "**- Pas de spam :** Évitez les messages répétitifs, les publicités non autorisées et le flood dans les canaux de discussion.\n\n"
-#        "**- Pas d'insultes ni de harcèlement :** Soyez respectueux envers les autres membres. Les insultes, le harcèlement et toute forme de discours haineux ne seront pas tolérés !!\n\n"
-#        "**- Contenu approprié :** Assurez-vous que tout le contenu partagé reste approprié pour tous les âges. Évitez le contenu offensant, explicite ou NSFW *(Not Safe For Work)*.\n\n"
-#        "**- Pas de débats sensibles :** Évitez les débats sensibles tels que la politique ou la religion, qui peuvent entraîner des tensions inutiles.\n\n"
-#        "**- Pas de partage de données personnelles :** Ne partagez pas vos informations personnelles ou celles d'autres membres sur le serveur. Protégez votre vie privée et celle des autres.\n\n"
-#        "Merci de respecter ces règles pour maintenir une atmosphère conviviale et accueillante pour tous les membres du serveur. En cas de problème ou de question, n'hésitez pas à contacter l'équipe de modération.\n\n"
-#        "Veuillez réagir avec ✅ à ce message pour accepter les règles et accéder au reste du serveur.\n\n"
-#        "Je vous souhaite un excellent séjour dans la **Maison d'Akkun** !! Amusez-vous ! 🎉",
-#        color=discord.Color.orange()
-#        )
-#    await interaction.response.send_message(embed=embed)
-
-# Ajouter le rôle quand on ajoute la réaction
+# === Gestion des réactions pour les rôles ===
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-    if payload.message_id != int(os.getenv("MSG_REGLES")):
+    # Ignorer les réactions du bot lui-même
+    if payload.user_id == bot.user.id:
         return
-    if str(payload.emoji) != "✅":
+    
+    message_id = payload.message_id
+    emoji = str(payload.emoji)
+
+    # Vérifier que le message est dans la liste
+    if message_id not in MESSAGE_EMOJIS:
         return
+
+    # Vérifier que l'emoji correspond à ce message
+    if emoji not in MESSAGE_EMOJIS[message_id]:
+        # Si l'emoji n'est pas autorisé, le supprimer
+        channel = bot.get_channel(payload.channel_id)
+        if channel:
+            try:
+                message = await channel.fetch_message(message_id)
+                await message.remove_reaction(emoji, payload.member)
+            except:
+                pass
+        return
+
     guild = bot.get_guild(payload.guild_id)
     if guild is None:
         return
+
     member = guild.get_member(payload.user_id)
     if member is None or member.bot:
         return
-    role = guild.get_role(int(os.getenv("ROLE_MEMBRE")))
+
+    # Récupération du rôle via l'emoji
+    role_id = EMOJI_ROLE_MAP.get(emoji)
+    if role_id is None:
+        return
+    
+    role = guild.get_role(role_id)
     if role is None:
         return
+
     await member.add_roles(role)
-    
+
+    # Définir le disque de couleur selon le rôle
+    role_colors = {
+        int(os.getenv("ROLE_MEMBRE")): "🟡",
+        int(os.getenv("ROLE_NOTIF_TWITCH")): "🟣",
+        int(os.getenv("ROLE_NOTIF_COLLEGUE")): "🔴"
+    }
+    color_disc = role_colors.get(role_id, "⚪")
+
     logs_channel = bot.get_channel(int(os.getenv("LOGS")))
     if logs_channel:
-        await logs_channel.send(f"✅🟡 Rôle {role.name} ajouté à {member.display_name}")
+        await logs_channel.send(f"✅ {color_disc} Rôle **{role.name}** ajouté à **{member.display_name}**")
 
-# Retirer le rôle quand on retire la réaction
 @bot.event
 async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
-    if payload.message_id != int(os.getenv("MSG_REGLES")):
+    message_id = payload.message_id
+    emoji = str(payload.emoji)
+
+    if message_id not in MESSAGE_EMOJIS:
         return
-    if str(payload.emoji) != "✅":
+
+    if emoji not in MESSAGE_EMOJIS[message_id]:
         return
+
     guild = bot.get_guild(payload.guild_id)
     if guild is None:
         return
+
     member = guild.get_member(payload.user_id)
-    if member is None:
+    if member is None or member.bot:
         return
-    role = guild.get_role(int(os.getenv("ROLE_MEMBRE")))
+
+    role_id = EMOJI_ROLE_MAP.get(emoji)
+    if role_id is None:
+        return
+    
+    role = guild.get_role(role_id)
     if role is None:
         return
+
     await member.remove_roles(role)
-    
+
+    # Définir le disque de couleur selon le rôle
+    role_colors = {
+        int(os.getenv("ROLE_MEMBRE")): "🟡",
+        int(os.getenv("ROLE_NOTIF_TWITCH")): "🟣",
+        int(os.getenv("ROLE_NOTIF_COLLEGUE")): "🔴"
+    }
+    color_disc = role_colors.get(role_id, "⚪")
+
     logs_channel = bot.get_channel(int(os.getenv("LOGS")))
     if logs_channel:
-        await logs_channel.send(f"❌🟡 Rôle {role.name} retiré à {member.display_name}")
+        await logs_channel.send(f"❌ {color_disc} Rôle **{role.name}** retiré à **{member.display_name}**")
 
-# Répond "Poire 🍐" quand un utilisateur dit "poire" ou variante,
-# et filtre les messages interdits
+# === Gestion des messages ===
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot:
@@ -354,6 +436,7 @@ async def on_message(message: discord.Message):
             )
             embed.set_footer(text=f"Message supprimé dans #{message.channel.name}")
             await logs_channel.send("🧹 Message supprimé", embed=embed)
+    
     await bot.process_commands(message)
 
 # === Lancer le bot ===
