@@ -1,12 +1,15 @@
 import discord
 import os
 from dotenv import load_dotenv
+from discord import app_commands
 from discord.ext import commands
 import feedparser
 import asyncio
 import aiohttp
 import json
 import random
+from datetime import datetime, timedelta, timezone
+import hashlib
 
 
 # Charger les variables d'environnement (.env)
@@ -72,6 +75,21 @@ yt_channels = {
     ]
 }
 
+# Mapping des chaînes Twitch
+twitch_streamers = {
+    "akkun752": [
+        (int(os.getenv("TW_AKKUN")), "@everyone"),
+        (int(os.getenv("YT_AKKUN_F")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE_F')}>")
+    ],
+    "falnix_": [
+        (int(os.getenv("YT_FALNIX")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
+        (int(os.getenv("TW_FALNIX_F")), f"<@&{os.getenv('ROLE_NOTIF_TWITCH_F')}>")
+    ],
+    "rapha_aile_": [
+        (int(os.getenv("TW_RAPH")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
+        (int(os.getenv("TW_RAPH_F")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE_F')}>")
+    ]
+}
 
 # Charger les dernières vidéos depuis un fichier au lancement
 if os.path.exists("last_videos.json"):
@@ -141,20 +159,15 @@ is_live = False
 
 async def check_twitch():
     await bot.wait_until_ready()
-    global is_live
-
-    twitch_user = "akkun752"
-    discord_channel = bot.get_channel(int(os.getenv("TW_AKKUN")))
     client_id = os.getenv("TWITCH_CLIENT_ID")
     client_secret = os.getenv("TWITCH_CLIENT_SECRET")
 
-    # Fonction pour obtenir un token d'accès
+    # Récupérer un token global au lancement
     async def get_access_token():
         async with aiohttp.ClientSession() as session:
             url = f"https://id.twitch.tv/oauth2/token?client_id={client_id}&client_secret={client_secret}&grant_type=client_credentials"
             async with session.post(url) as response:
-                data = await response.json()
-                return data.get("access_token")
+                return (await response.json()).get("access_token")
 
     access_token = await get_access_token()
     headers = {
@@ -162,45 +175,116 @@ async def check_twitch():
         "Authorization": f"Bearer {access_token}"
     }
 
+    # Mémoire pour éviter les spams
+    streamer_status = {name: False for name in twitch_streamers}
+
     while True:
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"https://api.twitch.tv/helix/streams?user_login={twitch_user}", headers=headers) as response:
-                data = await response.json()
+            for streamer, salons in twitch_streamers.items():
+                async with session.get(f"https://api.twitch.tv/helix/streams?user_login={streamer}", headers=headers) as response:
+                    data = await response.json()
 
-                stream_data = data.get("data", [])
-                currently_live = bool(stream_data)
+                    stream_data = data.get("data", [])
+                    currently_live = bool(stream_data)
 
-                # Nouveau live détecté
-                if currently_live and not is_live:
-                    is_live = True
-                    stream_info = stream_data[0]
-                    title = stream_info["title"]
-                    game_name = stream_info.get("game_name", "Jeu inconnu")
-                    thumbnail_url = stream_info["thumbnail_url"].replace("{width}", "1280").replace("{height}", "720")
-                    twitch_url = f"https://twitch.tv/{twitch_user}"
+                    # === STREAM START ===
+                    if currently_live and not streamer_status[streamer]:
+                        streamer_status[streamer] = True
+                        info = stream_data[0]
 
-                    if discord_channel:
+                        title = info["title"]
+                        game = info.get("game_name", "Jeu inconnu")
+
+                        thumbnail = (
+                            info["thumbnail_url"]
+                                .replace("{width}", "1280")
+                                .replace("{height}", "720")
+                            + f"?cache={random.randint(100000, 999999)}"
+                        )
+
+                        twitch_url = f"https://twitch.tv/{streamer}"
+
                         embed = discord.Embed(
-                            title="Akkun est en direct !!",
-                            description=f"Catégorie : {game_name}\n\n👉 [Venez nombreux !]({twitch_url})",
+                            title=f"{streamer} est en direct !!",
+                            description=f"Catégorie : {game}\n\n👉 [Rejoindre le live]({twitch_url})",
                             color=discord.Color.purple()
                         )
-                        embed.set_image(url=thumbnail_url)
-                        await discord_channel.send(f"||@everyone||\n# {title}", embed=embed)
+                        embed.set_image(url=thumbnail)
 
-                # Live terminé
-                elif not currently_live and is_live:
-                    is_live = False
-                    if discord_channel:
-                        await discord_channel.send("🔴 Le live est terminé.")
+                        # Poster dans CHAQUE salon associé
+                        for salon_id, mention in salons:
+                            salon = bot.get_channel(salon_id)
+                            if salon:
+                                mention_text = (
+                                    "||@everyone||\n" if mention == "@everyone"
+                                    else "" if mention in ["none", None]
+                                    else f"||{mention}||\n"
+                                )
+                                await salon.send(f"{mention_text}# {title}", embed=embed)
 
-        await asyncio.sleep(60)  # Vérifie toutes les minutes
+                    # === STREAM END ===
+                    elif not currently_live and streamer_status[streamer]:
+                        streamer_status[streamer] = False
+                        for salon_id, _ in salons:
+                            salon = bot.get_channel(salon_id)
+                            if salon:
+                                await salon.send(f"🔴 **{streamer} a terminé son live.**")
+
+        await asyncio.sleep(60)
+
+
+BANS_FILE = "temp_bans.json"
+
+# === Fonction utilitaire pour charger les bans temporaires ===
+def load_temp_bans():
+    if os.path.exists(BANS_FILE):
+        with open(BANS_FILE, "r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return []
+    return []
+
+# === Fonction utilitaire pour sauvegarder les bans temporaires ===
+def save_temp_bans(bans):
+    with open(BANS_FILE, "w", encoding="utf-8") as f:
+        json.dump(bans, f, indent=2, ensure_ascii=False)
+
+# === Tâche de fond pour débannir les utilisateurs ===
+async def temp_ban_checker(bot):
+    await bot.wait_until_ready()
+    while True:
+        now = datetime.now(timezone.utc).timestamp()
+        bans = load_temp_bans()
+        updated_bans = []
+
+        for ban in bans:
+            guild = bot.get_guild(ban["guild_id"])
+            if not guild:
+                updated_bans.append(ban)
+                continue
+
+            if now >= ban["unban_time"]:
+                try:
+                    await guild.unban(await bot.fetch_user(ban["user_id"]))
+                    logs_channel = bot.get_channel(int(os.getenv("LOGS")))
+                    if logs_channel:
+                        await logs_channel.send(f"🔓 {ban['user_name']} a été débanni automatiquement (ban temporaire expiré).")
+                except Exception as e:
+                    print(f"Erreur lors du déban de {ban['user_name']}: {e}")
+            else:
+                updated_bans.append(ban)
+
+        save_temp_bans(updated_bans)
+        await asyncio.sleep(30)  # Vérifie toutes les 30 secondes
+
 
 class MyBot(commands.Bot):
     async def setup_hook(self):
         # Ici on démarre la tâche en arrière-plan
         self.loop.create_task(check_youtube())
         self.loop.create_task(check_twitch())
+        self.loop.create_task(temp_ban_checker(self))
 
 # Créer le bot à partir de la classe personnalisée
 bot = MyBot(command_prefix="!", intents=discord.Intents.all())
@@ -262,38 +346,84 @@ async def saphira(interaction: discord.Interaction):
 
 # === Commande /awarn ===
 @bot.tree.command(name="awarn", description="Alerte un membre")
+@app_commands.default_permissions(administrator=True)
 async def awarn(interaction: discord.Interaction, member: discord.Member):
-    if interaction.guild and interaction.guild.id == int(os.getenv("SERVEUR_AKKUN")):
-        logs_channel = bot.get_channel(int(os.getenv("LOGS")))
+    if not interaction.guild:
+        await interaction.response.send_message("Erreur : impossible de récupérer le serveur.", ephemeral=True)
+        return
+
+    logs_channel = bot.get_channel(int(os.getenv("LOGS")))
+    server_name = interaction.guild.name
+
+    # Envoyer le MP au membre
+    await member.send(f"Tu as reçu une alerte sur **{server_name}**.")
+
+    # Récupérer tous les messages du salon de logs pour compter les warns de cet utilisateur
+    warn_count = 0
+    if logs_channel:
+        async for msg in logs_channel.history(limit=None):
+            if f"⚠️ {member.display_name} a reçu une alerte" in msg.content:
+                warn_count += 1
+
+        # Log de l'alerte
+        await logs_channel.send(f"⚠️ {member.display_name} a reçu une alerte. (Nombre d'alertes : {warn_count + 1})")
+
+    # Message à l'utilisateur
+    await interaction.response.send_message(
+        f"{member.display_name} a reçu une alerte. (Nombre d'alertes : {warn_count + 1})", ephemeral=True
+    )
+
+    # Si l'utilisateur a 4 warns ou plus, bannir temporairement 30 jours
+    if warn_count + 1 >= 4:
+        unban_time = (datetime.now(timezone.utc) + timedelta(days=30)).timestamp()
+
+        await member.send(f"⚠️ Tu as atteint 4 alertes ou plus sur **{server_name}**, tu es donc banni temporairement pendant 30 jours.")
+        await member.ban(reason=f"Ban automatique après 4 alertes sur {server_name}")
+
+        # Sauvegarder le ban temporaire
+        bans = load_temp_bans()
+        bans.append({
+            "user_id": member.id,
+            "user_name": member.display_name,
+            "guild_id": interaction.guild.id,
+            "unban_time": unban_time
+        })
+        save_temp_bans(bans)
+
         if logs_channel:
-            await logs_channel.send(f"⚠️ {member.display_name} a reçu une alerte.")
-    await member.send("Tu as reçu une alerte.")
-    await interaction.response.send_message(f"{member.display_name} a reçu une alerte.")
+            await logs_channel.send(f"⛔ {member.display_name} a été banni temporairement pendant 30 jours après avoir atteint 4 alertes.")
 
 # === Commande /aban ===
 @bot.tree.command(name="aban", description="Bannir un membre")
+@app_commands.default_permissions(administrator=True)
 async def aban(interaction: discord.Interaction, member: discord.Member):
     if interaction.guild and interaction.guild.id == int(os.getenv("SERVEUR_AKKUN")):
         logs_channel = bot.get_channel(int(os.getenv("LOGS")))
         if logs_channel:
             await logs_channel.send(f"⛔ {member.display_name} a été banni.")
-    await member.send("Tu as été banni.")
+    # Nom du serveur pour le message
+    server_name = interaction.guild.name if interaction.guild else "ce serveur"
+    await member.send(f"Tu as été banni de {server_name}.")
     await member.ban(reason="Un modérateur a banni cet utilisateur.")
-    await interaction.response.send_message(f"{member.display_name} a été banni.")
+    await interaction.response.send_message(f"{member.display_name} a été banni.", ephemeral=True)
 
 # === Commande /akick ===
 @bot.tree.command(name="akick", description="Expulser un membre")
+@app_commands.default_permissions(administrator=True)
 async def akick(interaction: discord.Interaction, member: discord.Member):
     if interaction.guild and interaction.guild.id == int(os.getenv("SERVEUR_AKKUN")):
         logs_channel = bot.get_channel(int(os.getenv("LOGS")))
         if logs_channel:
             await logs_channel.send(f"🚪 {member.display_name} a été expulsé.")
-    await member.send("Tu as été expulsé.")
+    # Nom du serveur pour le message
+    server_name = interaction.guild.name if interaction.guild else "ce serveur"
+    await member.send(f"Tu as été expulsé de {server_name}.")
     await member.kick(reason="Un modérateur a expulsé cet utilisateur.")
-    await interaction.response.send_message(f"{member.display_name} a été expulsé.")
+    await interaction.response.send_message(f"{member.display_name} a été expulsé.", ephemeral=True)
 
 # === Commande /embed ===
 @bot.tree.command(name="embed", description="Créer un Embed")
+@app_commands.default_permissions(administrator=True)
 async def embed(interaction: discord.Interaction, titre: str, desc: str, soustitre: str, contenu: str):
     embed = discord.Embed(title=titre, description=desc, color=discord.Color.orange())
     embed.add_field(name=soustitre, value=contenu)
@@ -459,24 +589,102 @@ async def on_message(message: discord.Message):
     
     await bot.process_commands(message)
 
-# == commande / droite ou gauche ==
+
+# == commande /droite ou gauche améliorée ==
 @bot.tree.command(name="dog", description="Droite ou Gauche ?")
 async def dog(interaction: discord.Interaction, msg: str):
-    dog_result = random.randint(0, 99)
+    # Créer un hash du message pour avoir un "nombre pseudo-aléatoire" stable
+    hash_int = int(hashlib.sha256(msg.lower().encode()).hexdigest(), 16)
+    dog_result = hash_int % 100  # un nombre de 0 à 99 basé sur le message
 
+    # Définir les tranches
     if dog_result == 0:
-        result = "d'**EXTREME GAUCHE**"
+        result = "d'**EXTREME DROITE**"
     elif dog_result < 45:
-        result = "de **GAUCHE**"
+        result = "de **DROITE**"
     elif dog_result < 55:
         result = "de **CENTRE**"
     elif dog_result == 99:
-        result = "d'**EXTREME DROITE**"
+        result = "d'**EXTREME GAUCHE**"
     else:
-        # Ici dog_result est entre 55 et 98
-        result = "de **DROITE**"
-
+        result = "de **GAUCHE**"
     await interaction.response.send_message(f"**{msg}**, c'est {result} !")
+
+
+# === Commande /clear ===
+@bot.tree.command(name="clear", description="Supprime des messages dans ce salon")
+@app_commands.default_permissions(administrator=True)
+@app_commands.describe(nombre="Nombre de messages à supprimer (laisser vide pour tout supprimer)")
+async def clear(interaction: discord.Interaction, nombre: int = None):
+    if not interaction.channel:
+        await interaction.response.send_message("Erreur : impossible de récupérer le salon.", ephemeral=True)
+        return
+
+    # Confirmer l'action auprès de l'utilisateur
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        # Récupérer le salon de logs
+        logs_channel = bot.get_channel(int(os.getenv("LOGS")))
+
+        # Si un nombre est fourni, supprimer ce nombre de messages
+        if nombre is not None:
+            if nombre < 1:
+                await interaction.followup.send("Le nombre de messages doit être supérieur à 0.", ephemeral=True)
+                return
+            deleted = await interaction.channel.purge(limit=nombre)
+            await interaction.followup.send(f"🗑️ {len(deleted)} messages supprimés.", ephemeral=True)
+
+            # Log
+            if logs_channel:
+                await logs_channel.send(f"🗑️ {interaction.user.display_name} a supprimé {len(deleted)} messages dans #{interaction.channel.name}.")
+        else:
+            # Sans paramètre : supprimer tous les messages du salon
+            deleted = await interaction.channel.purge()
+            await interaction.followup.send("🗑️ Tous les messages du salon ont été supprimés.", ephemeral=True)
+
+            # Log
+            if logs_channel:
+                await logs_channel.send(f"🗑️ {interaction.user.display_name} a purgé tous les messages dans #{interaction.channel.name}.")
+
+    except discord.Forbidden:
+        await interaction.followup.send("❌ Je n'ai pas la permission de supprimer les messages.", ephemeral=True)
+    except discord.HTTPException as e:
+        await interaction.followup.send(f"❌ Une erreur est survenue : {e}", ephemeral=True)
+
+
+# === Commande /atban ===
+@bot.tree.command(name="atban", description="Bannir un membre temporairement")
+@app_commands.default_permissions(administrator=True)
+async def atban(interaction: discord.Interaction, membre: discord.Member, jours: int):
+    if jours <= 0:
+        await interaction.response.send_message("⛔ La durée doit être supérieure à 0 jour(s).", ephemeral=True)
+        return
+
+    unban_time = (datetime.now(timezone.utc) + timedelta(days=jours)).timestamp()
+
+    # Bannir le membre
+    # Nom du serveur pour le message
+    server_name = interaction.guild.name if interaction.guild else "ce serveur"
+    await membre.send(f"Tu as été banni temporairement de {server_name} pendant {jours} jour(s).")
+    await membre.ban(reason=f"Ban temporaire de {jours} jour(s) par {interaction.user.display_name}.")
+
+    # Sauvegarder le ban temporaire
+    bans = load_temp_bans()
+    bans.append({
+        "user_id": membre.id,
+        "user_name": membre.display_name,
+        "guild_id": interaction.guild.id,
+        "unban_time": unban_time
+    })
+    save_temp_bans(bans)
+
+    # Log
+    logs_channel = bot.get_channel(int(os.getenv("LOGS")))
+    if logs_channel:
+        await logs_channel.send(f"⛔ {membre.display_name} a été banni temporairement pendant {jours} jour(s).")
+
+    await interaction.response.send_message(f"✅ {membre.display_name} a été banni temporairement pendant {jours} jour(s).", ephemeral=True)
 
 # === Lancer le bot ===
 bot.run(os.getenv("DISCORD_TOKEN"))
