@@ -6,6 +6,7 @@ import feedparser
 import asyncio
 import aiohttp
 import json
+import random
 
 
 # Charger les variables d'environnement (.env)
@@ -64,6 +65,10 @@ yt_channels = {
     os.getenv("ID_FALNIX"): [
         (int(os.getenv("YT_FALNIX")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
         (int(os.getenv("YT_FALNIX_F")), "everyone")
+    ],
+    os.getenv("ID_RAPH"): [
+        (int(os.getenv("TW_RAPH")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
+        (int(os.getenv("TW_RAPH_F")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE_F')}>")
     ]
 }
 
@@ -204,6 +209,12 @@ bot = MyBot(command_prefix="!", intents=discord.Intents.all())
 @bot.event
 async def on_ready():
     print("Bot en route !")
+    activity = discord.Activity(
+        type=discord.ActivityType.playing,
+        name="🪙 Aide mon ami Akkun"
+    )
+
+    await bot.change_presence(status=discord.Status.online, activity=activity)
     try:
         synced = await bot.tree.sync()
         print(f"Commandes synchronisées : {len(synced)}")
@@ -238,6 +249,15 @@ async def raphaaile(interaction: discord.Interaction):
         "👾 Twitch : https://twitch.tv/rapha_aile_\n"
         "🎥 YouTube : https://youtube.com/@raphaaile\n"
         "🎬 YouTube VOD : https://youtube.com/@RaphaAileVOD"
+    )
+
+# === Commande /saphira ===
+@bot.tree.command(name="saphira", description="Affiche le serveur de Saphira")
+async def saphira(interaction: discord.Interaction):
+    await interaction.response.send_message(
+        "**Les différents liens de Saphira :**\n"
+        "🤖​ Discord : https://discord.gg/xmkZcekE8J\n"
+        "🌐​ Site web : https://saphira-bump.fr"
     )
 
 # === Commande /awarn ===
@@ -438,6 +458,25 @@ async def on_message(message: discord.Message):
             await logs_channel.send("🧹 Message supprimé", embed=embed)
     
     await bot.process_commands(message)
+
+# == commande / droite ou gauche ==
+@bot.tree.command(name="dog", description="Droite ou Gauche ?")
+async def dog(interaction: discord.Interaction, msg: str):
+    dog_result = random.randint(0, 99)
+
+    if dog_result == 0:
+        result = "d'**EXTREME GAUCHE**"
+    elif dog_result < 45:
+        result = "de **GAUCHE**"
+    elif dog_result < 55:
+        result = "de **CENTRE**"
+    elif dog_result == 99:
+        result = "d'**EXTREME DROITE**"
+    else:
+        # Ici dog_result est entre 55 et 98
+        result = "de **DROITE**"
+
+    await interaction.response.send_message(f"**{msg}**, c'est {result} !")
 
 # === Lancer le bot ===
 bot.run(os.getenv("DISCORD_TOKEN"))
