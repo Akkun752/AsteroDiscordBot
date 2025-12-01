@@ -231,7 +231,7 @@ async def check_twitch():
                         for salon_id, _ in salons:
                             salon = bot.get_channel(salon_id)
                             if salon:
-                                await salon.send(f"🟣 **'{streamer}' a fini son stream...**")
+                                await salon.send(f"🟣 **`{streamer}` a fini son stream...**")
 
         await asyncio.sleep(60)
 
