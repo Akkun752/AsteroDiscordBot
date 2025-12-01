@@ -45,12 +45,15 @@ EMOJI_ROLE_MAP = {
     "🔔": int(os.getenv("ROLE_NOTIF_TWITCH")),
     "👥": int(os.getenv("ROLE_NOTIF_COLLEGUE")),
     "✅": int(os.getenv("ROLE_MEMBRE")),
+    "📅": int(os.getenv("ROLE_NOTIF_PLANNING")),
+    "🛠️": int(os.getenv("ROLE_NOTIF_PROJETS")),
+    "📊": int(os.getenv("ROLE_NOTIF_SONDAGES")),
 }
 
 # Dictionnaire des messages → emojis autorisés
 MESSAGE_EMOJIS = {
     int(os.getenv("MSG_REGLES")): ["✅"],
-    int(os.getenv("MSG_ROLE")): ["🔔", "👥"],
+    int(os.getenv("MSG_ROLE")): ["🔔", "👥","📅","🛠️","📊"],
 }
 
 # Mapping des chaînes YouTube
@@ -228,7 +231,7 @@ async def check_twitch():
                         for salon_id, _ in salons:
                             salon = bot.get_channel(salon_id)
                             if salon:
-                                await salon.send(f"🔴 **{streamer} a terminé son live.**")
+                                await salon.send(f"🟣 **'{streamer}' a fini son stream...**")
 
         await asyncio.sleep(60)
 
@@ -295,7 +298,7 @@ async def on_ready():
     print("Bot en route !")
     activity = discord.Activity(
         type=discord.ActivityType.playing,
-        name="🪙 Aide mon ami Akkun"
+        name="⚔️ Aide mon ami Akkun"
     )
 
     await bot.change_presence(status=discord.Status.online, activity=activity)
@@ -506,7 +509,10 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
     role_colors = {
         int(os.getenv("ROLE_MEMBRE")): "🟡",
         int(os.getenv("ROLE_NOTIF_TWITCH")): "🟣",
-        int(os.getenv("ROLE_NOTIF_COLLEGUE")): "🔴"
+        int(os.getenv("ROLE_NOTIF_COLLEGUE")): "🔴",
+        int(os.getenv("ROLE_NOTIF_PLANNING")): "🔵",
+        int(os.getenv("ROLE_NOTIF_PROJETS")): "🟠",
+        int(os.getenv("ROLE_NOTIF_SONDAGES")): "🔘"
     }
     color_disc = role_colors.get(role_id, "⚪")
 
@@ -547,7 +553,10 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     role_colors = {
         int(os.getenv("ROLE_MEMBRE")): "🟡",
         int(os.getenv("ROLE_NOTIF_TWITCH")): "🟣",
-        int(os.getenv("ROLE_NOTIF_COLLEGUE")): "🔴"
+        int(os.getenv("ROLE_NOTIF_COLLEGUE")): "🔴",
+        int(os.getenv("ROLE_NOTIF_PLANNING")): "🔵",
+        int(os.getenv("ROLE_NOTIF_PROJETS")): "🟠",
+        int(os.getenv("ROLE_NOTIF_SONDAGES")): "🔘"
     }
     color_disc = role_colors.get(role_id, "⚪")
 
@@ -685,6 +694,78 @@ async def atban(interaction: discord.Interaction, membre: discord.Member, jours:
         await logs_channel.send(f"⛔ {membre.display_name} a été banni temporairement pendant {jours} jour(s).")
 
     await interaction.response.send_message(f"✅ {membre.display_name} a été banni temporairement pendant {jours} jour(s).", ephemeral=True)
+
+# === Commande /help ===
+@bot.tree.command(name="help", description="Affiche toutes les commandes du bot")
+async def help_command(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="Centre d'aide d'Astero",
+        description="Voici la liste des commandes disponibles avec Astero !",
+        color=discord.Color.orange()
+    )
+    # Commandes utilisables par tous
+    embed.add_field(
+        name="/akkun",
+        value="Affiche les chaînes Akkun7",
+        inline=False
+    )
+    embed.add_field(
+        name="/dog",
+        value="Droite ou Gauche ?",
+        inline=False
+    )
+    embed.add_field(
+        name="/falnix",
+        value="Affiche les chaînes Falnix",
+        inline=False
+    )
+    embed.add_field(
+        name="/raphaaile",
+        value="Affiche les chaînes Rapha_Aile",
+        inline=False
+    )
+    embed.add_field(
+        name="/saphira",
+        value="Affiche le serveur de Saphira",
+        inline=False
+    )
+    embed.add_field(
+        name="/say",
+        value="Faire parler le bot",
+        inline=False
+    )
+    # Commandes administrateurs
+    embed.add_field(
+        name="━━━━━━━━━━━━━━━━━━━━",
+        value="**Commandes Administrateurs**",
+        inline=False
+    )
+    embed.add_field(
+        name="/aban (Admin)",
+        value="Bannir un membre",
+        inline=False
+    )
+    embed.add_field(
+        name="/akick (Admin)",
+        value="Expulser un membre",
+        inline=False
+    )
+    embed.add_field(
+        name="/atban (Admin)",
+        value="Bannir un membre temporairement",
+        inline=False
+    )
+    embed.add_field(
+        name="/awarn (Admin)",
+        value="Alerte un membre",
+        inline=False
+    )
+    embed.add_field(
+        name="/clear (Admin)",
+        value="Supprime des messages dans ce salon",
+        inline=False
+    )
+    await interaction.response.send_message(embed=embed)
 
 # === Lancer le bot ===
 bot.run(os.getenv("DISCORD_TOKEN"))
