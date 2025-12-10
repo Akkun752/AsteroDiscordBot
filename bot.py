@@ -69,8 +69,8 @@ yt_channels = {
         (int(os.getenv("YT_DEV")), "everyone")
     ],
     os.getenv("ID_FALNIX"): [
-        (int(os.getenv("YT_FALNIX")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
-        (int(os.getenv("YT_FALNIX_F")), "everyone")
+        (int(os.getenv("YT_FALNIX")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>")#,
+        #(int(os.getenv("YT_FALNIX_F")), "everyone")
     ],
     os.getenv("ID_RAPH"): [
         (int(os.getenv("TW_RAPH")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
