@@ -10,18 +10,16 @@ import json
 import random
 from datetime import datetime, timedelta, timezone
 import hashlib
+import re
 
 import asterodb
 
-# Charger les variables d'environnement (.env)
 load_dotenv()
-
 print("Lancement du bot...")
 
 variantes_poire = ["poire", "pear", "pera", "eriop", "birne", "🍐"]
 mots_interdits = ["abruti","fdp","pute","salope","batard","ntm","enculé","connard","connards","putes","salopes","batards","nsm","nique","niquer","abrutis","enculés","niquez","niques"]
 
-# Dictionnaire des emojis → rôles
 EMOJI_ROLE_MAP = {
     "🔔": int(os.getenv("ROLE_NOTIF_TWITCH")),
     "👥": int(os.getenv("ROLE_NOTIF_COLLEGUE")),
@@ -31,246 +29,139 @@ EMOJI_ROLE_MAP = {
     "📊": int(os.getenv("ROLE_NOTIF_SONDAGES")),
 }
 
-# Dictionnaire des messages → emojis autorisés
 MESSAGE_EMOJIS = {
     int(os.getenv("MSG_REGLES")): ["✅"],
     int(os.getenv("MSG_ROLE")): ["🔔", "👥","📅","🛠️","📊"],
 }
 
-# Mapping des chaînes YouTube
-yt_channels = {
-    os.getenv("ID_AKKUN7"): [
-        (int(os.getenv("YT_AKKUN")), "everyone"),
-        (int(os.getenv("YT_AKKUN_F")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE_F')}>")
-    ],
-    os.getenv("ID_AKKUN7VOD"): [
-        (int(os.getenv("YT_VOD")), f"<@&{os.getenv('ROLE_NOTIF_TWITCH')}>")
-    ],
-    os.getenv("ID_CORENTINLEDEV"): [
-        (int(os.getenv("YT_DEV")), "everyone")
-    ],
-    os.getenv("ID_FALNIX"): [
-        (int(os.getenv("YT_FALNIX")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>")#,
-        #(int(os.getenv("YT_FALNIX_F")), "everyone")
-    ],
-    os.getenv("ID_RAPH"): [
-        (int(os.getenv("TW_RAPH")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
-        (int(os.getenv("TW_RAPH_F")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE_F')}>")
-    ]
-}
-
-# Mapping des chaînes Twitch
-twitch_streamers = {
-    "akkun752": [
-        (int(os.getenv("TW_AKKUN")), "@everyone"),
-        (int(os.getenv("YT_AKKUN_F")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE_F')}>")
-    ],
-    "falnix_": [
-        (int(os.getenv("YT_FALNIX")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
-        (int(os.getenv("TW_FALNIX_F")), f"<@&{os.getenv('ROLE_NOTIF_TWITCH_F')}>")
-    ],
-    "rapha_aile_": [
-        (int(os.getenv("TW_RAPH")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE')}>"),
-        (int(os.getenv("TW_RAPH_F")), f"<@&{os.getenv('ROLE_NOTIF_COLLEGUE_F')}>")
-    ]
-}
-
-# Charger les dernières vidéos depuis un fichier au lancement
-if os.path.exists("last_videos.json"):
-    with open("last_videos.json", "r", encoding="utf-8") as f:
-        try:
-            last_video_ids = json.load(f)
-        except json.JSONDecodeError:
-            last_video_ids = {}
-else:
-    last_video_ids = {}
-
-
 async def check_youtube():
     await bot.wait_until_ready()
+
     while True:
-        for channel_id, salons in yt_channels.items():
+        rows = asterodb.get_all_yt_notifs()
+        yt_map = {}
+        for lien_chaine, salon_id, role in rows:
+            yt_map.setdefault(lien_chaine, []).append((int(salon_id), role))
+        for channel_id, targets in yt_map.items():
             feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
             feed = feedparser.parse(feed_url)
             if not feed.entries:
                 continue
-
-            latest_video = feed.entries[0]
-            video_id = latest_video.yt_videoid
-
-            # Initialise si la chaîne n'a pas encore d'entrée
-            if channel_id not in last_video_ids:
-                last_video_ids[channel_id] = {}
-
-            # 🔁 Pour chaque salon associé à cette chaîne YouTube
-            for salon_id, mention_type in salons:
-                if last_video_ids[channel_id].get(str(salon_id)) != video_id:
-                    last_video_ids[channel_id][str(salon_id)] = video_id
-
-                    # Sauvegarde immédiate dans le fichier JSON
-                    with open("last_videos.json", "w", encoding="utf-8") as f:
-                        json.dump(last_video_ids, f, indent=2, ensure_ascii=False)
-
-                    salon = bot.get_channel(salon_id)
-                    if salon:
-                        # Vérifie que la vidéo n'a pas déjà été postée récemment
-                        already_posted = False
-                        async for message in salon.history(limit=20):
-                            if latest_video.link in message.content:
-                                already_posted = True
-                                break
-
-                        if not already_posted:
-                            # Définir la mention à envoyer
-                            mention = (
-                                "||@everyone||\n" if mention_type == "everyone"
-                                else ("" if mention_type == "none"
-                                else f"||{mention_type}||\n")
-                            )
-
-                            await salon.send(
-                                f"{mention}# {latest_video.title}\n{latest_video.link}"
-                            )
-                        else:
-                            print(f"⏩ Vidéo déjà postée dans {salon.name} : {latest_video.link}")
-
-        await asyncio.sleep(180)  # Vérifie toutes les 3 minutes
-
-
-
-# Dernier statut connu du stream (True = en live, False = hors-ligne)
-is_live = False
+            entry = feed.entries[0]
+            video_id = entry.yt_videoid
+            if getattr(entry, "yt_live_broadcast", "none") == "upcoming":
+                continue
+            if asterodb.is_yt_video_posted(channel_id, video_id):
+                continue
+            for salon_id, role in targets:
+                salon = bot.get_channel(salon_id)
+                if not salon:
+                    continue
+                if role == "everyone":
+                    mention = "||@everyone||\n"
+                elif role in [None, "none"]:
+                    mention = ""
+                else:
+                    mention = f"||<@&{role}>||\n"
+                await salon.send(
+                    f"{mention}# {entry.title}\n{entry.link}"
+                )
+            asterodb.mark_yt_video_posted(channel_id, video_id)
+        await asyncio.sleep(180)
 
 async def check_twitch():
     await bot.wait_until_ready()
     client_id = os.getenv("TWITCH_CLIENT_ID")
     client_secret = os.getenv("TWITCH_CLIENT_SECRET")
-
-    # Récupérer un token global au lancement
     async def get_access_token():
         async with aiohttp.ClientSession() as session:
-            url = f"https://id.twitch.tv/oauth2/token?client_id={client_id}&client_secret={client_secret}&grant_type=client_credentials"
+            url = (
+                "https://id.twitch.tv/oauth2/token"
+                f"?client_id={client_id}"
+                f"&client_secret={client_secret}"
+                "&grant_type=client_credentials"
+            )
             async with session.post(url) as response:
                 return (await response.json()).get("access_token")
-
     access_token = await get_access_token()
     headers = {
         "Client-ID": client_id,
         "Authorization": f"Bearer {access_token}"
     }
-
-    # Mémoire pour éviter les spams
-    streamer_status = {name: False for name in twitch_streamers}
-
     while True:
+        rows = asterodb.get_all_tw_notifs()
+        tw_map = {}
+        for id_twitch, salon_id, role in rows:
+            tw_map.setdefault(id_twitch.lower(), []).append((int(salon_id), role))
         async with aiohttp.ClientSession() as session:
-            for streamer, salons in twitch_streamers.items():
-                async with session.get(f"https://api.twitch.tv/helix/streams?user_login={streamer}", headers=headers) as response:
+            for streamer, targets in tw_map.items():
+                async with session.get(
+                    f"https://api.twitch.tv/helix/streams?user_login={streamer}",
+                    headers=headers
+                ) as response:
                     data = await response.json()
-
-                    stream_data = data.get("data", [])
-                    currently_live = bool(stream_data)
-
-                    # === STREAM START ===
-                    if currently_live and not streamer_status[streamer]:
-                        streamer_status[streamer] = True
-                        info = stream_data[0]
-
-                        title = info["title"]
-                        game = info.get("game_name", "Jeu inconnu")
-
-                        thumbnail = (
-                            info["thumbnail_url"]
-                                .replace("{width}", "1280")
-                                .replace("{height}", "720")
-                            + f"?cache={random.randint(100000, 999999)}"
-                        )
-
-                        twitch_url = f"https://twitch.tv/{streamer}"
-
-                        embed = discord.Embed(
-                            title=f"{streamer} est en direct !!",
-                            description=f"Catégorie : {game}\n\n👉 [Rejoindre le live]({twitch_url})",
-                            color=discord.Color.purple()
-                        )
-                        embed.set_image(url=thumbnail)
-
-                        # Poster dans CHAQUE salon associé
-                        for salon_id, mention in salons:
-                            salon = bot.get_channel(salon_id)
-                            if salon:
-                                mention_text = (
-                                    "||@everyone||\n" if mention == "@everyone"
-                                    else "" if mention in ["none", None]
-                                    else f"||{mention}||\n"
-                                )
-                                await salon.send(f"{mention_text}# {title}", embed=embed)
-
-                    # === STREAM END ===
-                    elif not currently_live and streamer_status[streamer]:
-                        streamer_status[streamer] = False
-                        for salon_id, _ in salons:
-                            salon = bot.get_channel(salon_id)
-                            if salon:
-                                await salon.send(f"🟣 **`{streamer}` a fini son stream...**")
-
+                stream_data = data.get("data", [])
+                if not stream_data:
+                    continue
+                info = stream_data[0]
+                stream_id = info["id"]
+                if asterodb.is_tw_stream_posted(streamer, stream_id):
+                    continue
+                title = info["title"]
+                game = info.get("game_name", "Jeu inconnu")
+                thumbnail = (
+                    info["thumbnail_url"]
+                        .replace("{width}", "1280")
+                        .replace("{height}", "720")
+                    + f"?cache={random.randint(100000, 999999)}"
+                )
+                twitch_url = f"https://twitch.tv/{streamer}"
+                embed = discord.Embed(
+                    title=f"`{streamer}` est en direct 🟣",
+                    description=f"🎮 {game}\n\n👉 [Rejoindre le live]({twitch_url})",
+                    color=discord.Color.purple()
+                )
+                embed.set_image(url=thumbnail)
+                for salon_id, role in targets:
+                    salon = bot.get_channel(salon_id)
+                    if not salon:
+                        continue
+                    if role == "everyone":
+                        mention = "||@everyone||\n"
+                    elif role in [None, "none"]:
+                        mention = ""
+                    else:
+                        mention = f"||<@&{role}>||\n"
+                    await salon.send(f"{mention}# {title}", embed=embed)
+                asterodb.mark_tw_stream_posted(streamer, stream_id)
         await asyncio.sleep(60)
 
-
-BANS_FILE = "temp_bans.json"
-
-# === Fonction utilitaire pour charger les bans temporaires ===
-def load_temp_bans():
-    if os.path.exists(BANS_FILE):
-        with open(BANS_FILE, "r", encoding="utf-8") as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return []
-    return []
-
-# === Fonction utilitaire pour sauvegarder les bans temporaires ===
-def save_temp_bans(bans):
-    with open(BANS_FILE, "w", encoding="utf-8") as f:
-        json.dump(bans, f, indent=2, ensure_ascii=False)
-
-# === Tâche de fond pour débannir les utilisateurs ===
-async def temp_ban_checker(bot):
+async def check_global_bans():
     await bot.wait_until_ready()
     while True:
-        now = datetime.now(timezone.utc).timestamp()
-        bans = load_temp_bans()
-        updated_bans = []
-
-        for ban in bans:
-            guild = bot.get_guild(ban["guild_id"])
-            if not guild:
-                updated_bans.append(ban)
-                continue
-
-            if now >= ban["unban_time"]:
-                try:
-                    await guild.unban(await bot.fetch_user(ban["user_id"]))
-                    logs_channel = bot.get_channel(int(os.getenv("LOGS")))
-                    if logs_channel:
-                        await logs_channel.send(f"🔓 {ban['user_name']} a été débanni automatiquement (ban temporaire expiré).")
-                except Exception as e:
-                    print(f"Erreur lors du déban de {ban['user_name']}: {e}")
-            else:
-                updated_bans.append(ban)
-
-        save_temp_bans(updated_bans)
-        await asyncio.sleep(30)  # Vérifie toutes les 30 secondes
-
+        bans = asterodb.get_all_bans()
+        for guild in bot.guilds:
+            logs_channel = bot.get_channel(int(os.getenv("LOGS")))
+            for ban_entry in bans:
+                member_id = ban_entry["id_membre"]
+                raison = ban_entry.get("raison", "Banni automatiquement")
+                member = guild.get_member(member_id)
+                if member:
+                    try:
+                        await member.ban(reason=raison)
+                        if logs_channel:
+                            await logs_channel.send(
+                                f"⛔ {member.mention} a été banni automatiquement sur {guild.name} ({raison})"
+                            )
+                    except Exception as e:
+                        print(f"Erreur en bannissant {member_id} sur {guild.name} : {e}")
+        await asyncio.sleep(300)  # toutes les 5 minutes
 
 class MyBot(commands.Bot):
     async def setup_hook(self):
-        # Ici on démarre la tâche en arrière-plan
         self.loop.create_task(check_youtube())
         self.loop.create_task(check_twitch())
-        self.loop.create_task(temp_ban_checker(self))
-
-# Créer le bot à partir de la classe personnalisée
+        self.loop.create_task(check_global_bans())
 bot = MyBot(command_prefix="!", intents=discord.Intents.all())
 
 # === Événement au démarrage ===
@@ -279,9 +170,8 @@ async def on_ready():
     print("Bot en route !")
     activity = discord.Activity(
         type=discord.ActivityType.playing,
-        name="⚔️ Aide mon ami Akkun"
+        name="⚔️ Défend Discord de toutes mes force !"
     )
-
     await bot.change_presence(status=discord.Status.online, activity=activity)
     try:
         synced = await bot.tree.sync()
@@ -309,16 +199,6 @@ async def falnix(interaction: discord.Interaction):
         "👾 Twitch : https://twitch.tv/falnix_"
     )
 
-# === Commande /raphaaile ===
-@bot.tree.command(name="raphaaile", description="Affiche les chaînes Rapha_Aile")
-async def raphaaile(interaction: discord.Interaction):
-    await interaction.response.send_message(
-        "**Les chaînes de Rapha_Aile :**\n"
-        "👾 Twitch : https://twitch.tv/rapha_aile_\n"
-        "🎥 YouTube : https://youtube.com/@raphaaile\n"
-        "🎬 YouTube VOD : https://youtube.com/@RaphaAileVOD"
-    )
-
 # === Commande /saphira ===
 @bot.tree.command(name="saphira", description="Affiche le serveur de Saphira")
 async def saphira(interaction: discord.Interaction):
@@ -333,49 +213,38 @@ async def saphira(interaction: discord.Interaction):
 @app_commands.default_permissions(administrator=True)
 async def awarn(interaction: discord.Interaction, member: discord.Member):
     if not interaction.guild:
-        await interaction.response.send_message("Erreur : impossible de récupérer le serveur.", ephemeral=True)
+        await interaction.response.send_message(
+            "Erreur : impossible de récupérer le serveur.",
+            ephemeral=True
+        )
         return
-
+    id_membre = member.id
+    asterodb.add_warn(id_membre)
+    total_warns = asterodb.count_warns(id_membre)
     logs_channel = bot.get_channel(int(os.getenv("LOGS")))
     server_name = interaction.guild.name
-
-    # Envoyer le MP au membre
-    await member.send(f"Tu as reçu une alerte sur **{server_name}**.")
-
-    # Récupérer tous les messages du salon de logs pour compter les warns de cet utilisateur
-    warn_count = 0
+    try:
+        await member.send(f"⚠️ Tu as reçu une alerte sur **{server_name}**. (Total : {total_warns})")
+    except Exception:
+        pass
     if logs_channel:
-        async for msg in logs_channel.history(limit=None):
-            if f"⚠️ {member.display_name} a reçu une alerte" in msg.content:
-                warn_count += 1
-
-        # Log de l'alerte
-        await logs_channel.send(f"⚠️ {member.display_name} a reçu une alerte. (Nombre d'alertes : {warn_count + 1})")
-
-    # Message à l'utilisateur
+        await logs_channel.send(
+            f"⚠️ {member.mention} a reçu une alerte. (Total : {total_warns})"
+        )
     await interaction.response.send_message(
-        f"{member.display_name} a reçu une alerte. (Nombre d'alertes : {warn_count + 1})", ephemeral=True
+        f"{member.mention} a reçu une alerte. (Total : {total_warns})",
+        ephemeral=True
     )
-
-    # Si l'utilisateur a 4 warns ou plus, bannir temporairement 30 jours
-    if warn_count + 1 >= 4:
-        unban_time = (datetime.now(timezone.utc) + timedelta(days=30)).timestamp()
-
-        await member.send(f"⚠️ Tu as atteint 4 alertes ou plus sur **{server_name}**, tu es donc banni temporairement pendant 30 jours.")
-        await member.ban(reason=f"Ban automatique après 4 alertes sur {server_name}")
-
-        # Sauvegarder le ban temporaire
-        bans = load_temp_bans()
-        bans.append({
-            "user_id": member.id,
-            "user_name": member.display_name,
-            "guild_id": interaction.guild.id,
-            "unban_time": unban_time
-        })
-        save_temp_bans(bans)
-
+    if total_warns >= 4:
+        await member.send(
+            f"⚠️ Tu as atteint 4 alertes ou plus, tu es donc banni définitivement."
+        )
+        await member.ban(reason=f"Ban automatique après 4 alertes")
+        asterodb.add_to_bans(member.id, raison="Ban après 4 alerts")
         if logs_channel:
-            await logs_channel.send(f"⛔ {member.display_name} a été banni temporairement pendant 30 jours après avoir atteint 4 alertes.")
+            await logs_channel.send(
+                f"⛔ {member.mention} a été banni définitivement après avoir atteint 4 alertes."
+            )
 
 # === Commande /aban ===
 @bot.tree.command(name="aban", description="Bannir un membre")
@@ -385,10 +254,10 @@ async def aban(interaction: discord.Interaction, member: discord.Member):
         logs_channel = bot.get_channel(int(os.getenv("LOGS")))
         if logs_channel:
             await logs_channel.send(f"⛔ {member.display_name} a été banni.")
-    # Nom du serveur pour le message
     server_name = interaction.guild.name if interaction.guild else "ce serveur"
     await member.send(f"Tu as été banni de {server_name}.")
     await member.ban(reason="Un modérateur a banni cet utilisateur.")
+    asterodb.add_to_bans(member.id, raison="Ban par un modérateur")
     await interaction.response.send_message(f"{member.display_name} a été banni.", ephemeral=True)
 
 # === Commande /akick ===
@@ -399,7 +268,6 @@ async def akick(interaction: discord.Interaction, member: discord.Member):
         logs_channel = bot.get_channel(int(os.getenv("LOGS")))
         if logs_channel:
             await logs_channel.send(f"🚪 {member.display_name} a été expulsé.")
-    # Nom du serveur pour le message
     server_name = interaction.guild.name if interaction.guild else "ce serveur"
     await member.send(f"Tu as été expulsé de {server_name}.")
     await member.kick(reason="Un modérateur a expulsé cet utilisateur.")
@@ -425,144 +293,216 @@ async def on_member_join(member: discord.Member):
     if member.guild and member.guild.id == int(os.getenv("SERVEUR_AKKUN")):
         welcome_channel = bot.get_channel(int(os.getenv("WELCOME")))
         logs_channel = bot.get_channel(int(os.getenv("LOGS")))
-
-        # Log dans le canal défini
         if logs_channel:
             await logs_channel.send(f"👋 {member.display_name} a rejoint le serveur.")
-
-        # Message de bienvenue
         embed = discord.Embed(
             title=f"Bienvenue {member.display_name} !",
             description="Passe un agréable moment avec nous !",
             color=discord.Color.orange()
         )
-        embed.set_image(url="https://www.akkunverse.fr/astero/Astero-Welcome.png")
-
+        embed.set_image(url="https://www.corentin-boutigny.fr/AsteroWelcome.png")
         if welcome_channel:
             await welcome_channel.send(embed=embed)
 
-# === Commande /dbtest ===
-@bot.tree.command(name="dbtest", description="Affiche le contenu de la table astero_yt")
+@bot.tree.command(
+    name="list_notif",
+    description="Liste les notifications YouTube et Twitch de ce serveur"
+)
 @app_commands.default_permissions(administrator=True)
-async def dbtest(interaction: discord.Interaction):
-    rows = asterodb.get_astero_yt()
-
+async def list_notif(interaction: discord.Interaction):
+    guild_id = str(interaction.guild.id)
+    rows = asterodb.get_notifs_for_guild(guild_id)
     if not rows:
         await interaction.response.send_message(
-            "📭 La table **astero_yt** est vide.",
+            "📭 Aucune notification configurée sur ce serveur.",
             ephemeral=True
         )
         return
-
-    # Construction des messages (limite Discord 2000 chars)
-    chunks = []
-    current_chunk = ""
-
-    for row in rows:
-        # row = (id, id_serveur, id_salon, lien_chaine, id_role)
-        block = (
-            f"**ID** `{row[0]}`\n"
-            f"• Serveur : `{row[1]}`\n"
-            f"• Salon : `{row[2]}`\n"
-            f"• Chaîne : {row[3]}\n"
-            f"• Rôle : `{row[4] if row[4] else 'Aucun'}`\n"
-            "──────────────\n"
+    yt_blocks = []
+    tw_blocks = []
+    for notif_id, type_, salon_id, identifiant, role in rows:
+        salon = f"<#{salon_id}>"
+        role_txt = (
+            "@everyone" if role == "everyone"
+            else "Aucun rôle" if not role
+            else f"<@&{role}>"
         )
+        block = (
+            f"**{notif_id}** : `{identifiant}`\n"
+            f"{salon} • {role_txt}"
+        )
+        if type_ == "YouTube":
+            yt_blocks.append(block)
+        else:
+            tw_blocks.append(block)
+    def build_section(title, blocks, emoji):
+        if not blocks:
+            return f"_Aucune notification {title.lower()}_"
+        return (
+            f"**{emoji} {title.upper()}**\n"
+            "══════════════════\n"
+            + "\n────────────\n".join(blocks)
+        )
+    embed = discord.Embed(
+        title="📢 Notifications du serveur",
+        color=discord.Color.orange()
+    )
+    embed.add_field(
+        name="══════════════════",
+        value=build_section("YouTube", yt_blocks, "📺"),
+        inline=False
+    )
+    embed.add_field(
+        name="══════════════════",
+        value=build_section("Twitch", tw_blocks, "🎮"),
+        inline=False
+    )
+    embed.set_footer(
+        text="Suppression : /remove_notif <youtube|twitch> <id>"
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
-        if len(current_chunk) + len(block) > 1900:
-            chunks.append(current_chunk)
-            current_chunk = ""
-
-        current_chunk += block
-
-    if current_chunk:
-        chunks.append(current_chunk)
-
-    # Envoi
-    await interaction.response.send_message(chunks[0], ephemeral=True)
-    for chunk in chunks[1:]:
-        await interaction.followup.send(chunk, ephemeral=True)
-
-# === Commande /add_notif_yt ===
+# === Commande /add_notif ===
 @bot.tree.command(
-    name="add_notif_yt",
-    description="Ajoute une notification YouTube dans la base de données"
+    name="add_notif",
+    description="Ajoute une notification YouTube ou Twitch"
 )
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(
+    type="Plateforme (YouTube ou Twitch)",
     salon="Salon où poster la notification",
-    chaine_id="ID de la chaîne YouTube (UC...)",
-    role_id="ID du rôle à mentionner (laisser vide ou 'everyone')"
+    identifiant="ID chaîne YouTube (UC...) ou login/ID Twitch",
+    role="Rôle à mentionner (@role, ID, @everyone ou 'none')"
 )
-async def add_notif_yt(
+@app_commands.choices(
+    type=[
+        app_commands.Choice(name="YouTube", value="youtube"),
+        app_commands.Choice(name="Twitch", value="twitch")
+    ]
+)
+async def add_notif(
     interaction: discord.Interaction,
+    type: app_commands.Choice[str],
     salon: discord.TextChannel,
-    chaine_id: str,
-    role_id: str = None
+    identifiant: str,
+    role: str
 ):
-    # Sécurité
     if not interaction.guild:
         await interaction.response.send_message(
             "❌ Cette commande doit être utilisée dans un serveur.",
             ephemeral=True
         )
         return
-
     id_serveur = str(interaction.guild.id)
-    id_salon = str(salon.id)  # 👈 ID PROPRE, PAS <#...>
+    id_salon = str(salon.id)
+    role = role.strip()
+    id_role = None
+    if role.lower() in ["none", "aucun", "null"]:
+        id_role = None
+    elif role.lower() in ["everyone", "@everyone"]:
+        id_role = "everyone"
 
-    # Normalisation du rôle
-    if role_id:
-        role_id = role_id.strip()
-        if role_id.lower() in ["null", "none", ""]:
-            role_id = None
-        elif role_id.lower() == "everyone":
-            role_id = "everyone"
     else:
-        role_id = None
-
+        match = re.match(r"<@&(\d+)>", role)
+        if match:
+            id_role = match.group(1)
+        elif role.isdigit():
+            id_role = role
+        else:
+            await interaction.response.send_message(
+                "❌ Rôle invalide.\n\n"
+                "Formats acceptés :\n"
+                "• `@role`\n"
+                "• `123456789`\n"
+                "• `@everyone`\n"
+                "• `none`",
+                ephemeral=True
+            )
+            return
     try:
-        asterodb.insert_astero_yt(
-            id_serveur=id_serveur,
-            id_salon=id_salon,
-            lien_chaine=chaine_id,
-            id_role=role_id
-        )
+        if type.value == "youtube":
+            asterodb.insert_astero_yt(
+                id_serveur=id_serveur,
+                id_salon=id_salon,
+                lien_chaine=identifiant,
+                id_role=id_role
+            )
+        else:
+            asterodb.insert_astero_tw(
+                id_serveur=id_serveur,
+                id_salon=id_salon,
+                id_twitch=identifiant,
+                id_role=id_role
+            )
     except Exception as e:
         await interaction.response.send_message(
-            f"❌ Erreur lors de l'insertion en base de données :\n```{e}```",
+            f"❌ Erreur base de données :\n```{e}```",
             ephemeral=True
         )
         return
-
-    # Confirmation
     await interaction.response.send_message(
-        "✅ **Notification YouTube ajoutée avec succès !**\n\n"
-        f"• Serveur : `{id_serveur}`\n"
+        "✅ **Notification ajoutée !**\n\n"
+        f"• Type : **{type.name}**\n"
         f"• Salon : {salon.mention}\n"
-        f"• Chaîne : `{chaine_id}`\n"
-        f"• Rôle : `{role_id if role_id else 'Aucun'}`",
+        f"• Identifiant : `{identifiant}`\n"
+        f"• Rôle : `{id_role if id_role else 'Aucun'}`",
         ephemeral=True
     )
 
+# === Commande /remove_notif ===
+@bot.tree.command(
+    name="remove_notif",
+    description="Supprime une notification YouTube ou Twitch"
+)
+@app_commands.default_permissions(administrator=True)
+@app_commands.describe(
+    plateforme="youtube ou twitch",
+    notif_id="ID de la notification à supprimer"
+)
+@app_commands.choices(
+        plateforme=[
+            app_commands.Choice(name="YouTube", value="youtube"),
+            app_commands.Choice(name="Twitch", value="twitch")
+        ]
+    )
+async def remove_notif(
+    interaction: discord.Interaction,
+    plateforme: str,
+    notif_id: int
+):
+    guild_id = interaction.guild.id
+    if plateforme == "youtube":
+        success = asterodb.delete_yt_notif(guild_id, notif_id)
+
+    elif plateforme == "twitch":
+        success = asterodb.delete_tw_notif(guild_id, notif_id)
+    else:
+        await interaction.response.send_message(
+            "❌ Plateforme invalide (`Youtube` ou `Twitch`)",
+            ephemeral=True
+        )
+        return
+    if success:
+        await interaction.response.send_message(
+            f"✅ Notification **{plateforme}** `{notif_id}` supprimée.",
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            f"⚠️ Aucune notification **{plateforme}** trouvée avec l’ID `{notif_id}`.",
+            ephemeral=True
+        )
 
 # === Gestion des réactions pour les rôles ===
 @bot.event
 async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
-    # Ignorer les réactions du bot lui-même
     if payload.user_id == bot.user.id:
         return
-    
     message_id = payload.message_id
     emoji = str(payload.emoji)
-
-    # Vérifier que le message est dans la liste
     if message_id not in MESSAGE_EMOJIS:
         return
-
-    # Vérifier que l'emoji correspond à ce message
     if emoji not in MESSAGE_EMOJIS[message_id]:
-        # Si l'emoji n'est pas autorisé, le supprimer
         channel = bot.get_channel(payload.channel_id)
         if channel:
             try:
@@ -571,27 +511,19 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
             except:
                 pass
         return
-
     guild = bot.get_guild(payload.guild_id)
     if guild is None:
         return
-
     member = guild.get_member(payload.user_id)
     if member is None or member.bot:
         return
-
-    # Récupération du rôle via l'emoji
     role_id = EMOJI_ROLE_MAP.get(emoji)
     if role_id is None:
         return
-    
     role = guild.get_role(role_id)
     if role is None:
         return
-
     await member.add_roles(role)
-
-    # Définir le disque de couleur selon le rôle
     role_colors = {
         int(os.getenv("ROLE_MEMBRE")): "🟡",
         int(os.getenv("ROLE_NOTIF_TWITCH")): "🟣",
@@ -601,7 +533,6 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
         int(os.getenv("ROLE_NOTIF_SONDAGES")): "🔘"
     }
     color_disc = role_colors.get(role_id, "⚪")
-
     logs_channel = bot.get_channel(int(os.getenv("LOGS")))
     if logs_channel:
         await logs_channel.send(f"✅ {color_disc} Rôle **{role.name}** ajouté à **{member.display_name}**")
@@ -610,32 +541,23 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
 async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
     message_id = payload.message_id
     emoji = str(payload.emoji)
-
     if message_id not in MESSAGE_EMOJIS:
         return
-
     if emoji not in MESSAGE_EMOJIS[message_id]:
         return
-
     guild = bot.get_guild(payload.guild_id)
     if guild is None:
         return
-
     member = guild.get_member(payload.user_id)
     if member is None or member.bot:
         return
-
     role_id = EMOJI_ROLE_MAP.get(emoji)
     if role_id is None:
         return
-    
     role = guild.get_role(role_id)
     if role is None:
         return
-
     await member.remove_roles(role)
-
-    # Définir le disque de couleur selon le rôle
     role_colors = {
         int(os.getenv("ROLE_MEMBRE")): "🟡",
         int(os.getenv("ROLE_NOTIF_TWITCH")): "🟣",
@@ -645,7 +567,6 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
         int(os.getenv("ROLE_NOTIF_SONDAGES")): "🔘"
     }
     color_disc = role_colors.get(role_id, "⚪")
-
     logs_channel = bot.get_channel(int(os.getenv("LOGS")))
     if logs_channel:
         await logs_channel.send(f"❌ {color_disc} Rôle **{role.name}** retiré à **{member.display_name}**")
@@ -655,14 +576,9 @@ async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
 async def on_message(message: discord.Message):
     if message.author.bot:
         return
-
     msg = message.content.lower()
-
-    # --- Réponse "Poire 🍐" ---
     if any(var in msg for var in variantes_poire):
         await message.channel.send("Poire 🍐")
-
-    # --- Filtrage des mots interdits ---
     mots_message = msg.split()
     if any(mot in mots_interdits for mot in mots_message):
         try:
@@ -670,7 +586,6 @@ async def on_message(message: discord.Message):
         except discord.Forbidden:
             print("❌ Impossible de supprimer le message (permissions manquantes).")
             return
-
         await message.channel.send(f"{message.author.display_name}, tu ne peux pas dire ça.", delete_after=5)
         logs_channel = bot.get_channel(int(os.getenv("LOGS")))
         if logs_channel:
@@ -681,18 +596,13 @@ async def on_message(message: discord.Message):
             )
             embed.set_footer(text=f"Message supprimé dans #{message.channel.name}")
             await logs_channel.send("🧹 Message supprimé", embed=embed)
-    
     await bot.process_commands(message)
 
-
-# == commande /droite ou gauche améliorée ==
+# == commande /droite ou gauche ==
 @bot.tree.command(name="dog", description="Droite ou Gauche ?")
 async def dog(interaction: discord.Interaction, msg: str):
-    # Créer un hash du message pour avoir un "nombre pseudo-aléatoire" stable
     hash_int = int(hashlib.sha256(msg.lower().encode()).hexdigest(), 16)
-    dog_result = hash_int % 100  # un nombre de 0 à 99 basé sur le message
-
-    # Définir les tranches
+    dog_result = hash_int % 100
     if dog_result == 0:
         result = "d'**EXTREME DROITE**"
     elif dog_result < 45:
@@ -705,7 +615,6 @@ async def dog(interaction: discord.Interaction, msg: str):
         result = "de **GAUCHE**"
     await interaction.response.send_message(f"**{msg}**, c'est {result} !")
 
-
 # === Commande /clear ===
 @bot.tree.command(name="clear", description="Supprime des messages dans ce salon")
 @app_commands.default_permissions(administrator=True)
@@ -714,72 +623,62 @@ async def clear(interaction: discord.Interaction, nombre: int = None):
     if not interaction.channel:
         await interaction.response.send_message("Erreur : impossible de récupérer le salon.", ephemeral=True)
         return
-
-    # Confirmer l'action auprès de l'utilisateur
     await interaction.response.defer(ephemeral=True)
-
     try:
-        # Récupérer le salon de logs
         logs_channel = bot.get_channel(int(os.getenv("LOGS")))
-
-        # Si un nombre est fourni, supprimer ce nombre de messages
         if nombre is not None:
             if nombre < 1:
                 await interaction.followup.send("Le nombre de messages doit être supérieur à 0.", ephemeral=True)
                 return
             deleted = await interaction.channel.purge(limit=nombre)
             await interaction.followup.send(f"🗑️ {len(deleted)} messages supprimés.", ephemeral=True)
-
-            # Log
             if logs_channel:
                 await logs_channel.send(f"🗑️ {interaction.user.display_name} a supprimé {len(deleted)} messages dans #{interaction.channel.name}.")
         else:
-            # Sans paramètre : supprimer tous les messages du salon
             deleted = await interaction.channel.purge()
             await interaction.followup.send("🗑️ Tous les messages du salon ont été supprimés.", ephemeral=True)
-
-            # Log
             if logs_channel:
                 await logs_channel.send(f"🗑️ {interaction.user.display_name} a purgé tous les messages dans #{interaction.channel.name}.")
-
     except discord.Forbidden:
         await interaction.followup.send("❌ Je n'ai pas la permission de supprimer les messages.", ephemeral=True)
     except discord.HTTPException as e:
         await interaction.followup.send(f"❌ Une erreur est survenue : {e}", ephemeral=True)
-
 
 # === Commande /atban ===
 @bot.tree.command(name="atban", description="Bannir un membre temporairement")
 @app_commands.default_permissions(administrator=True)
 async def atban(interaction: discord.Interaction, membre: discord.Member, jours: int):
     if jours <= 0:
-        await interaction.response.send_message("⛔ La durée doit être supérieure à 0 jour(s).", ephemeral=True)
+        await interaction.response.send_message(
+            "⛔ La durée doit être supérieure à 0 jour(s).",
+            ephemeral=True
+        )
         return
-
-    unban_time = (datetime.now(timezone.utc) + timedelta(days=jours)).timestamp()
-
-    # Bannir le membre
-    # Nom du serveur pour le message
+    unban_time = int((datetime.now(timezone.utc) + timedelta(days=jours)).timestamp())
     server_name = interaction.guild.name if interaction.guild else "ce serveur"
-    await membre.send(f"Tu as été banni temporairement de {server_name} pendant {jours} jour(s).")
-    await membre.ban(reason=f"Ban temporaire de {jours} jour(s) par {interaction.user.display_name}.")
-
-    # Sauvegarder le ban temporaire
-    bans = load_temp_bans()
-    bans.append({
-        "user_id": membre.id,
-        "user_name": membre.display_name,
-        "guild_id": interaction.guild.id,
-        "unban_time": unban_time
-    })
-    save_temp_bans(bans)
-
-    # Log
+    try:
+        await membre.send(
+            f"Tu as été banni temporairement de {server_name} pendant {jours} jour(s)."
+        )
+    except Exception:
+        pass
+    await membre.ban(
+        reason=f"Ban temporaire de {jours} jour(s) par {interaction.user.display_name}."
+    )
+    asterodb.save_temp_ban(
+        id_serveur=interaction.guild.id,
+        id_membre=membre.id,
+        temps_ban=unban_time
+    )
     logs_channel = bot.get_channel(int(os.getenv("LOGS")))
     if logs_channel:
-        await logs_channel.send(f"⛔ {membre.display_name} a été banni temporairement pendant {jours} jour(s).")
-
-    await interaction.response.send_message(f"✅ {membre.display_name} a été banni temporairement pendant {jours} jour(s).", ephemeral=True)
+        await logs_channel.send(
+            f"⛔ {membre.mention} a été banni temporairement pendant {jours} jour(s)."
+        )
+    await interaction.response.send_message(
+        f"✅ {membre.mention} a été banni temporairement pendant {jours} jour(s).",
+        ephemeral=True
+    )
 
 # === Commande /help ===
 @bot.tree.command(name="help", description="Affiche toutes les commandes du bot")
@@ -806,11 +705,6 @@ async def help_command(interaction: discord.Interaction):
         inline=False
     )
     embed.add_field(
-        name="/raphaaile",
-        value="Affiche les chaînes Rapha_Aile",
-        inline=False
-    )
-    embed.add_field(
         name="/saphira",
         value="Affiche le serveur de Saphira",
         inline=False
@@ -832,13 +726,13 @@ async def help_command(interaction: discord.Interaction):
         inline=False
     )
     embed.add_field(
-        name="/akick (Admin)",
-        value="Expulser un membre",
+        name="/add_notif (Admin)",
+        value="Ajoute une notification communautaire",
         inline=False
     )
     embed.add_field(
-        name="/atban (Admin)",
-        value="Bannir un membre temporairement",
+        name="/akick (Admin)",
+        value="Expulser un membre",
         inline=False
     )
     embed.add_field(
@@ -849,6 +743,16 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="/clear (Admin)",
         value="Supprime des messages dans ce salon",
+        inline=False
+    )
+    embed.add_field(
+        name="/list_notif (Admin)",
+        value="Liste toutes les notifications communautaires du serveur",
+        inline=False
+    )
+    embed.add_field(
+        name="/remove_notif (Admin)",
+        value="Supprime une notification communautaire",
         inline=False
     )
     await interaction.response.send_message(embed=embed)
