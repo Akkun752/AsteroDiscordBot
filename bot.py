@@ -11,6 +11,7 @@ import random
 from datetime import datetime, timedelta, timezone
 import hashlib
 
+import asterodb
 
 # Charger les variables d'environnement (.env)
 load_dotenv()
@@ -18,27 +19,7 @@ load_dotenv()
 print("Lancement du bot...")
 
 variantes_poire = ["poire", "pear", "pera", "eriop", "birne", "🍐"]
-mots_interdits = [
-    "abruti",
-    "fdp",
-    "pute",
-    "salope",
-    "batard",
-    "ntm",
-    "enculé",
-    "connard",
-    "connards",
-    "putes",
-    "salopes",
-    "batards",
-    "nsm",
-    "nique",
-    "niquer",
-    "abrutis",
-    "enculés",
-    "niquez",
-    "niques"
-]
+mots_interdits = ["abruti","fdp","pute","salope","batard","ntm","enculé","connard","connards","putes","salopes","batards","nsm","nique","niquer","abrutis","enculés","niquez","niques"]
 
 # Dictionnaire des emojis → rôles
 EMOJI_ROLE_MAP = {
@@ -456,6 +437,111 @@ async def on_member_join(member: discord.Member):
 
         if welcome_channel:
             await welcome_channel.send(embed=embed)
+
+# === Commande /dbtest ===
+@bot.tree.command(name="dbtest", description="Affiche le contenu de la table astero_yt")
+@app_commands.default_permissions(administrator=True)
+async def dbtest(interaction: discord.Interaction):
+    rows = asterodb.get_astero_yt()
+
+    if not rows:
+        await interaction.response.send_message(
+            "📭 La table **astero_yt** est vide.",
+            ephemeral=True
+        )
+        return
+
+    # Construction des messages (limite Discord 2000 chars)
+    chunks = []
+    current_chunk = ""
+
+    for row in rows:
+        # row = (id, id_serveur, id_salon, lien_chaine, id_role)
+        block = (
+            f"**ID** `{row[0]}`\n"
+            f"• Serveur : `{row[1]}`\n"
+            f"• Salon : `{row[2]}`\n"
+            f"• Chaîne : {row[3]}\n"
+            f"• Rôle : `{row[4] if row[4] else 'Aucun'}`\n"
+            "──────────────\n"
+        )
+
+        if len(current_chunk) + len(block) > 1900:
+            chunks.append(current_chunk)
+            current_chunk = ""
+
+        current_chunk += block
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    # Envoi
+    await interaction.response.send_message(chunks[0], ephemeral=True)
+    for chunk in chunks[1:]:
+        await interaction.followup.send(chunk, ephemeral=True)
+
+# === Commande /add_notif_yt ===
+@bot.tree.command(
+    name="add_notif_yt",
+    description="Ajoute une notification YouTube dans la base de données"
+)
+@app_commands.default_permissions(administrator=True)
+@app_commands.describe(
+    salon="Salon où poster la notification",
+    chaine_id="ID de la chaîne YouTube (UC...)",
+    role_id="ID du rôle à mentionner (laisser vide ou 'everyone')"
+)
+async def add_notif_yt(
+    interaction: discord.Interaction,
+    salon: discord.TextChannel,
+    chaine_id: str,
+    role_id: str = None
+):
+    # Sécurité
+    if not interaction.guild:
+        await interaction.response.send_message(
+            "❌ Cette commande doit être utilisée dans un serveur.",
+            ephemeral=True
+        )
+        return
+
+    id_serveur = str(interaction.guild.id)
+    id_salon = str(salon.id)  # 👈 ID PROPRE, PAS <#...>
+
+    # Normalisation du rôle
+    if role_id:
+        role_id = role_id.strip()
+        if role_id.lower() in ["null", "none", ""]:
+            role_id = None
+        elif role_id.lower() == "everyone":
+            role_id = "everyone"
+    else:
+        role_id = None
+
+    try:
+        asterodb.insert_astero_yt(
+            id_serveur=id_serveur,
+            id_salon=id_salon,
+            lien_chaine=chaine_id,
+            id_role=role_id
+        )
+    except Exception as e:
+        await interaction.response.send_message(
+            f"❌ Erreur lors de l'insertion en base de données :\n```{e}```",
+            ephemeral=True
+        )
+        return
+
+    # Confirmation
+    await interaction.response.send_message(
+        "✅ **Notification YouTube ajoutée avec succès !**\n\n"
+        f"• Serveur : `{id_serveur}`\n"
+        f"• Salon : {salon.mention}\n"
+        f"• Chaîne : `{chaine_id}`\n"
+        f"• Rôle : `{role_id if role_id else 'Aucun'}`",
+        ephemeral=True
+    )
+
 
 # === Gestion des réactions pour les rôles ===
 @bot.event
