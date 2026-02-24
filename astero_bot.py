@@ -15,7 +15,7 @@ import astero_logs
 load_dotenv()
 
 # Configuration
-VERSION = "v4.1.1"
+VERSION = "v4.1.2"
 print(f"Lancement du bot Astero {VERSION}...")
 
 class MyBot(commands.Bot):

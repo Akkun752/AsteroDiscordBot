@@ -162,7 +162,7 @@ class NotifsCog(commands.Cog):
             return
         logs_channel = astero_logs.get_logs(self.bot, interaction.guild.id)
         if logs_channel:
-            emoji = "<:youtube:ID_EMOJI>" if type.value == "youtube" else "<:twitch:ID_EMOJI>"
+            emoji = "<:youtube:1475959770371325962>" if type.value == "youtube" else "<:twitch:1475959787475697697>"
             role_mention = f"<@&{id_role}>" if id_role and id_role != "everyone" else ("@everyone" if id_role == "everyone" else "aucun")
             await logs_channel.send(f"{emoji} {interaction.user.mention} a ajouté une notification pour `{identifiant}` dans {salon.mention} (Mention : {role_mention}).")
 
@@ -173,22 +173,27 @@ class NotifsCog(commands.Cog):
         app_commands.Choice(name="YouTube", value="youtube"),
         app_commands.Choice(name="Twitch", value="twitch")
     ])
-    async def remove_notif(self, interaction: discord.Interaction, plateforme: str, notif_id: int):
+    async def remove_notif(self, interaction: discord.Interaction, plateforme: app_commands.Choice[str], notif_id: int):
         guild_id = interaction.guild.id
-        if plateforme == "youtube":
+        # On utilise plateforme.value car c'est un Choice
+        p_val = plateforme.value 
+        
+        if p_val == "youtube":
             success = astero_db.delete_yt_notif(guild_id, notif_id)
-        elif plateforme == "twitch":
+        elif p_val == "twitch":
             success = astero_db.delete_tw_notif(guild_id, notif_id)
         else:
-            await interaction.response.send_message("❌ Plateforme invalide (`Youtube` ou `Twitch`)", ephemeral=True)
+            await interaction.response.send_message("❌ Plateforme invalide", ephemeral=True)
             return
+
         if success:
+            await interaction.response.send_message(f"✅ Notification {p_val} supprimée.", ephemeral=True)
             logs_channel = astero_logs.get_logs(self.bot, interaction.guild.id)
             if logs_channel:
-                emoji = "<:youtube:1475959770371325962>" if type.value == "youtube" else "<:twitch:1475959787475697697>"
+                emoji = "<:youtube:1475959770371325962>" if p_val == "youtube" else "<:twitch:1475959787475697697>"
                 await logs_channel.send(f"🗑️ {interaction.user.mention} a supprimé la notification {emoji} avec l'ID `{notif_id}`.")
         else:
-            await interaction.response.send_message(f"⚠️ Aucune notification **{plateforme}** trouvée avec l'ID `{notif_id}`.", ephemeral=True)
+            await interaction.response.send_message(f"⚠️ Aucune notification **{p_val}** trouvée avec l'ID `{notif_id}`.", ephemeral=True)
         
     @app_commands.command(
         name="list_notif",
