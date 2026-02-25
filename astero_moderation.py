@@ -20,7 +20,7 @@ class ModerationCog(commands.Cog):
     # === Filtre de messages (Mots interdits + Filtre de salon) ===
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.author.bot or not message.guild:
+        if not message.guild:
             return
 
         msg_lower = message.content.lower()
@@ -61,9 +61,9 @@ class ModerationCog(commands.Cog):
                     pass
 
     # === Commandes de Gestion des Filtres ===
-    @app_commands.command(name="filter_add", description="Force un texte obligatoire dans un salon")
+    @app_commands.command(name="add_filter", description="Force un texte obligatoire dans un salon")
     @app_commands.default_permissions(administrator=True)
-    async def filter_add(self, interaction: discord.Interaction, salon: discord.TextChannel, texte: str):
+    async def add_filter(self, interaction: discord.Interaction, salon: discord.TextChannel, texte: str):
         astero_db.add_channel_filter(interaction.guild.id, salon.id, texte)
         discord_msg = f"🔧 {interaction.user.mention} a ajouté un filtre sur {salon.mention} : `{texte}`."
         await send_log(
@@ -77,21 +77,27 @@ class ModerationCog(commands.Cog):
             ephemeral=True
         )
 
-    @app_commands.command(name="filter_list", description="Liste les filtres de salon actifs")
+    @app_commands.command(name="list_filter", description="Liste les filtres de salon actifs")
     @app_commands.default_permissions(administrator=True)
-    async def filter_list(self, interaction: discord.Interaction):
-        rows = astero_db.get_filters(interaction.guild.id)
+    async def list_filter(self, interaction: discord.Interaction):
+        guild_id = interaction.guild.id
+        rows = astero_db.get_filters(guild_id)
         if not rows:
-            return await interaction.response.send_message("Aucun filtre n'est configuré sur ce serveur.", ephemeral=True)
-
-        txt = "**Filtres de salon actifs :**\n"
+            await interaction.response.send_message("🛡️ Aucun filtre n'est configuré sur ce serveur.",ephemeral=True)
+            return
+        filter_blocks = []
         for fid, sid, texte in rows:
-            txt += f"ID: `{fid}` | <#{sid}> -> `{texte}`\n"
-        await interaction.response.send_message(txt, ephemeral=True)
+            block = (f"**ID: {fid}**\n"f"<#{sid}> ➔ `{texte}`")
+            filter_blocks.append(block)
+        content = ("**📜 FILTRES ACTIFS**\n" "══════════════════\n" + "\n────────────\n".join(filter_blocks))
+        embed = discord.Embed(title="🛡️ Modération des salons",color=discord.Color.orange())
+        embed.add_field(name="══════════════════",value=content, inline=False)
+        embed.set_footer(text="Suppression : /remove_filter <id>")
+        await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="filter_remove", description="Supprime un filtre de salon via son ID")
+    @app_commands.command(name="remove_filter", description="Supprime un filtre de salon via son ID")
     @app_commands.default_permissions(administrator=True)
-    async def filter_remove(self, interaction: discord.Interaction, filter_id: int):
+    async def remove_filter(self, interaction: discord.Interaction, filter_id: int):
         if astero_db.delete_filter(interaction.guild.id, filter_id):
             discord_msg = f"🗑️ {interaction.user.mention} a supprimé le filtre ID `{filter_id}`."
             await send_log(
