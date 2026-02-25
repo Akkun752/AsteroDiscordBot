@@ -18,6 +18,7 @@ class CommandsCog(commands.Cog):
         # --- Commandes Utilisateurs ---
         embed.add_field(name="/akkun", value="Affiche les chaînes Akkun7", inline=False)
         embed.add_field(name="/falnix", value="Affiche les chaînes Falnix", inline=False)
+        embed.add_field(name="/panel", value="Affiche les liens d'Astero", inline=False)
         embed.add_field(name="/saphira", value="Affiche le serveur de Saphira", inline=False)
         embed.add_field(name="/say", value="Faire parler le bot", inline=False)
 
@@ -60,30 +61,42 @@ class CommandsCog(commands.Cog):
     # === Commande /akkun ===
     @app_commands.command(name="akkun", description="Affiche les chaînes Akkun7")
     async def akkun(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            "**Les chaînes de Akkun :**\n"
-            "🎥 YouTube : https://youtube.com/@Akkun7\n"
-            "🎬 YouTube VOD : https://youtube.com/@Akkun7VOD\n"
-            "👾 Twitch : https://twitch.tv/akkun752"
-        )
+        embed = discord.Embed(title="Akkun",description="**Voici les chaînes de Akkun :**",color=discord.Color.orange())
+        embed.set_thumbnail(url="https://www.akkunverse.fr/astero/akkun.png")
+        embed.add_field(name="🎥 YouTube", value="https://youtube.com/@Akkun7", inline=False)
+        embed.add_field(name="🎬 YouTube VOD", value="https://youtube.com/@Akkun7VOD", inline=False)
+        embed.add_field(name="👾 Twitch", value="https://twitch.tv/akkun752", inline=False)
+        embed.add_field(name="🤖​ Discord", value="https://discord.gg/24kM8KUd9j", inline=False)
+        await interaction.response.send_message(embed=embed)
 
     # === Commande /falnix ===
     @app_commands.command(name="falnix", description="Affiche les chaînes Falnix")
     async def falnix(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            "**Les chaînes de Falnix :**\n"
-            "🎥 YouTube : https://youtube.com/@Falnix\n"
-            "👾 Twitch : https://twitch.tv/falnix_"
-        )
+        embed = discord.Embed(title="Falnix",description="**Voici les chaînes de Falnix :**",color=discord.Color.orange())
+        embed.set_thumbnail(url="https://www.akkunverse.fr/astero/falnix.png")
+        embed.add_field(name="🎥 YouTube", value="https://youtube.com/@Falnix", inline=False)
+        embed.add_field(name="🎬 YouTube VOD", value="https://youtube.com/@FalnixVOD", inline=False)
+        embed.add_field(name="👾 Twitch", value="https://twitch.tv/falnix_", inline=False)
+        embed.add_field(name="🤖​ Discord", value="https://discord.gg/chez-falnix", inline=False)
+        await interaction.response.send_message(embed=embed)
 
     # === Commande /saphira ===
     @app_commands.command(name="saphira", description="Affiche le serveur de Saphira")
     async def saphira(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            "**Les différents liens de Saphira :**\n"
-            "🤖​ Discord : https://discord.gg/xmkZcekE8J\n"
-            "🌐​ Site web : https://saphira-bump.fr"
-        )
+        embed = discord.Embed(title="Saphira",description="**Voici les différents liens de Saphira :**",color=discord.Color.orange())
+        embed.set_thumbnail(url="https://www.akkunverse.fr/astero/saphira.png")
+        embed.add_field(name="🤖​ Discord", value="https://discord.gg/xmkZcekE8J", inline=False)
+        embed.add_field(name="🌐​ Site web", value="https://saphira-bump.fr", inline=False)
+        await interaction.response.send_message(embed=embed)
+    
+    # === Commande /panel ===
+    @app_commands.command(name="panel", description="Affiche les liens d'Astero")
+    async def panel(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="Astero",description="**Voici les différents liens d'Astero:**",color=discord.Color.orange())
+        embed.set_thumbnail(url="https://www.akkunverse.fr/astero/AsteroDiscordBot.png")
+        embed.add_field(name="🤖​ Discord", value="``- À venir -``", inline=False)
+        embed.add_field(name="🌐​ Site web", value="https://akkunverse.fr/astero/", inline=False)
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(CommandsCog(bot))

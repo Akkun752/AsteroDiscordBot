@@ -5,6 +5,7 @@ from discord.ext import commands
 
 import astero_db
 import astero_logs
+from astero_logs import send_log
 
 
 class RoleReactsCog(commands.Cog):
@@ -12,13 +13,9 @@ class RoleReactsCog(commands.Cog):
         self.bot = bot
 
     def _normalize_emoji(self, emoji: discord.PartialEmoji) -> str:
-        """Normalise l'emoji pour correspondre à ce qui est stocké en DB.
-        - Emoji classique (ex: ✅) → retourne le caractère unicode
-        - Emoji custom (ex: <:nom:123456>) → retourne <:nom:id>
-        """
         if emoji.is_custom_emoji():
-            return str(emoji)  # format : <:nom:id> ou <a:nom:id>
-        return emoji.name    # caractère unicode ex: ✅
+            return str(emoji)
+        return emoji.name
 
     # === Ajout de rôle au clic ===
     @commands.Cog.listener()
@@ -44,9 +41,14 @@ class RoleReactsCog(commands.Cog):
         except discord.Forbidden:
             print(f"❌ Impossible d'ajouter {role.name} à {member.display_name} (permissions manquantes).")
             return
-        logs_channel = astero_logs.get_logs(self.bot, guild.id)
-        if logs_channel:
-            await logs_channel.send(f"🎭 {role.mention} ajouté à {member.mention} via réaction.")
+
+        discord_msg = f"🎭 {role.mention} ajouté à {member.mention} via réaction."
+        await send_log(
+            self.bot, guild.id,
+            message=discord_msg,
+            user=str(member),
+            action=f"role_react_add → rôle '{role.name}' ajouté à {member} sur {guild.name}"
+        )
 
     # === Retrait de rôle au clic ===
     @commands.Cog.listener()
@@ -70,9 +72,14 @@ class RoleReactsCog(commands.Cog):
         except discord.Forbidden:
             print(f"❌ Impossible de retirer {role.name} à {member.display_name} (permissions manquantes).")
             return
-        logs_channel = astero_logs.get_logs(self.bot, guild.id)
-        if logs_channel:
-            await logs_channel.send(f"🎭 {role.mention} retiré à {member.mention} via réaction.")
+
+        discord_msg = f"🎭 {role.mention} retiré à {member.mention} via réaction."
+        await send_log(
+            self.bot, guild.id,
+            message=discord_msg,
+            user=str(member),
+            action=f"role_react_remove → rôle '{role.name}' retiré à {member} sur {guild.name}"
+        )
 
     # === Commande /add_role_react ===
     @app_commands.command(name="add_role_react", description="Associe un emoji sur un message à un rôle")
@@ -92,7 +99,6 @@ class RoleReactsCog(commands.Cog):
         if not interaction.guild:
             await interaction.response.send_message("❌ Commande réservée à un serveur.", ephemeral=True)
             return
-        # Normalise l'emoji saisi : si c'est un emoji custom collé (<:nom:id>), on le garde tel quel
         emoji = emoji.strip()
         try:
             astero_db.insert_role_react(
@@ -104,9 +110,14 @@ class RoleReactsCog(commands.Cog):
         except Exception as e:
             await interaction.response.send_message(f"❌ Erreur base de données :\n```{e}```", ephemeral=True)
             return
-        logs_channel = astero_logs.get_logs(self.bot, interaction.guild.id)
-        if logs_channel:
-            await logs_channel.send(f"⚙️ {interaction.user.mention} a lié l'emoji {emoji} au rôle {role.mention} sur le message `{message_id}`.")
+
+        discord_msg = f"⚙️ {interaction.user.mention} a lié l'emoji {emoji} au rôle {role.mention} sur le message `{message_id}`."
+        await send_log(
+            self.bot, interaction.guild.id,
+            message=discord_msg,
+            user=str(interaction.user),
+            action=f"add_role_react → emoji={emoji}, rôle='{role.name}', message={message_id} sur {interaction.guild.name}"
+        )
         await interaction.response.send_message(
             f"✅ Role react ajouté !\n\n"
             f"• Message : `{message_id}`\n"
@@ -125,7 +136,7 @@ class RoleReactsCog(commands.Cog):
         rows = astero_db.get_role_reacts_for_guild(interaction.guild.id)
         if not rows:
             await interaction.response.send_message(
-                "📭 Aucun role react configuré sur ce serveur.", ephemeral=True
+                "📭 Aucun role react configuré sur ce serveur."
             )
             return
         blocks = []
@@ -152,6 +163,13 @@ class RoleReactsCog(commands.Cog):
             return
         success = astero_db.delete_role_react(interaction.guild.id, react_id)
         if success:
+            discord_msg = f"🗑️ {interaction.user.mention} a supprimé le role react ID `{react_id}`."
+            await send_log(
+                self.bot, interaction.guild.id,
+                message=discord_msg,
+                user=str(interaction.user),
+                action=f"remove_role_react → ID {react_id} sur {interaction.guild.name}"
+            )
             await interaction.response.send_message(
                 f"✅ Role react `{react_id}` supprimé.", ephemeral=True
             )

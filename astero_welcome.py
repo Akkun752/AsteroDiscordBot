@@ -4,6 +4,7 @@ from discord.ext import commands
 
 import astero_db
 import astero_logs
+from astero_logs import send_log
 
 class WelcomeCog(commands.Cog):
     def __init__(self, bot):
@@ -23,9 +24,13 @@ class WelcomeCog(commands.Cog):
             await interaction.response.send_message(f"❌ Erreur base de données :\n```{e}```", ephemeral=True)
             return
         await interaction.response.send_message(f"✅ Salon de bienvenue défini : {salon.mention}", ephemeral=True)
-        logs_channel = astero_logs.get_logs(self.bot, interaction.guild.id)
-        if logs_channel:
-            await logs_channel.send(f"👋 {interaction.user.mention} a défini {salon.mention} comme salon de bienvenue.")
+        discord_msg = f"👋 {interaction.user.mention} a défini {salon.mention} comme salon de bienvenue."
+        await send_log(
+            self.bot, interaction.guild.id,
+            message=discord_msg,
+            user=str(interaction.user),
+            action=f"welcome_set → salon #{salon.name} ({salon.id}) sur {interaction.guild.name}"
+        )
 
     # === Commande /welcome_remove ===
     @app_commands.command(name="welcome_remove", description="Supprime le salon de bienvenue de ce serveur")
@@ -36,9 +41,13 @@ class WelcomeCog(commands.Cog):
             return
         success = astero_db.remove_welcome_channel(interaction.guild.id)
         if success:
-            logs_channel = astero_logs.get_logs(self.bot, interaction.guild.id)
-            if logs_channel:
-                await logs_channel.send(f"🗑️ {interaction.user.mention} a supprimé le salon de bienvenue.")
+            discord_msg = f"🗑️ {interaction.user.mention} a supprimé le salon de bienvenue."
+            await send_log(
+                self.bot, interaction.guild.id,
+                message=discord_msg,
+                user=str(interaction.user),
+                action=f"welcome_remove sur {interaction.guild.name}"
+            )
             await interaction.response.send_message("✅ Salon de bienvenue supprimé.", ephemeral=True)
         else:
             await interaction.response.send_message("⚠️ Aucun salon de bienvenue configuré.", ephemeral=True)

@@ -10,6 +10,7 @@ import re
 
 import astero_db
 import astero_logs
+from astero_logs import send_log
 
 class NotifsCog(commands.Cog):
     def __init__(self, bot):
@@ -45,6 +46,7 @@ class NotifsCog(commands.Cog):
                         mention = f"||<@&{role}>||\n"
                     await salon.send(f"{mention}# {entry.title}\n{entry.link}")
                 astero_db.mark_yt_video_posted(channel_id, video_id)
+                astero_logs.log_action("Système", f"Notification YouTube envoyée : {entry.title} ({entry.link})")
             await asyncio.sleep(180)
 
     async def check_twitch(self):
@@ -114,6 +116,7 @@ class NotifsCog(commands.Cog):
                             mention = f"||<@&{role}>||\n"
                         await salon.send(f"{mention}# {title}", embed=embed)
                     astero_db.mark_tw_stream_posted(streamer, stream_id)
+                    astero_logs.log_action("Système", f"Notification Twitch envoyée : {streamer} - {title}")
             await asyncio.sleep(60)
 
     @app_commands.command(name="add_notif", description="Ajoute une notification YouTube ou Twitch")
@@ -130,7 +133,7 @@ class NotifsCog(commands.Cog):
     ])
     async def add_notif(self, interaction: discord.Interaction, type: app_commands.Choice[str], salon: discord.TextChannel, identifiant: str, role: str):
         await interaction.response.defer(ephemeral=True)
-        
+
         if not interaction.guild:
             await interaction.followup.send("❌ Cette commande doit être utilisée dans un serveur.")
             return
@@ -159,24 +162,25 @@ class NotifsCog(commands.Cog):
                 astero_db.insert_astero_yt(id_serveur=id_serveur, id_salon=id_salon, lien_chaine=identifiant, id_role=id_role)
             else:
                 astero_db.insert_astero_tw(id_serveur=id_serveur, id_salon=id_salon, id_twitch=identifiant, id_role=id_role)
-            
+
             await interaction.followup.send(f"✅ Notification {type.name} ajoutée avec succès !")
-        
+
         except Exception as e:
             await interaction.followup.send(f"❌ Erreur base de données :\n```{e}```")
             return
-        
-        # Envoi des logs
-        logs_channel = astero_logs.get_logs(self.bot, interaction.guild.id)
-        if logs_channel:
-            emoji_yt = "<:youtube:1475959708518187008>"
-            emoji_tw = "<:twitch:1475959730051747933>"
-            
-            emoji = emoji_yt if type.value == "youtube" else emoji_tw
-            
-            role_mention = f"<@&{id_role}>" if id_role and id_role != "everyone" else ("@everyone" if id_role == "everyone" else "aucun")
-            await logs_channel.send(f"{emoji} {interaction.user.mention} a ajouté une notification pour `{identifiant}` dans {salon.mention} (Mention : {role_mention}).")
 
+        emoji_yt = "<:youtube:1475959708518187008>"
+        emoji_tw = "<:twitch:1475959730051747933>"
+        emoji = emoji_yt if type.value == "youtube" else emoji_tw
+        role_mention = f"<@&{id_role}>" if id_role and id_role != "everyone" else ("@everyone" if id_role == "everyone" else "aucun")
+
+        discord_msg = f"{emoji} {interaction.user.mention} a ajouté une notification pour `{identifiant}` dans {salon.mention} (Mention : {role_mention})."
+        await send_log(
+            self.bot, interaction.guild.id,
+            message=discord_msg,
+            user=str(interaction.user),
+            action=f"add_notif {type.name} → identifiant='{identifiant}', salon=#{salon.name}, role={role_mention} sur {interaction.guild.name}"
+        )
 
     @app_commands.command(name="remove_notif", description="Supprime une notification YouTube ou Twitch")
     @app_commands.default_permissions(administrator=True)
@@ -187,8 +191,8 @@ class NotifsCog(commands.Cog):
     ])
     async def remove_notif(self, interaction: discord.Interaction, plateforme: app_commands.Choice[str], notif_id: int):
         guild_id = interaction.guild.id
-        p_val = plateforme.value 
-        
+        p_val = plateforme.value
+
         if p_val == "youtube":
             success = astero_db.delete_yt_notif(guild_id, notif_id)
         elif p_val == "twitch":
@@ -199,12 +203,74 @@ class NotifsCog(commands.Cog):
 
         if success:
             await interaction.response.send_message(f"✅ Notification {p_val} supprimée.", ephemeral=True)
-            logs_channel = astero_logs.get_logs(self.bot, interaction.guild.id)
-            if logs_channel:
-                emoji = "<:youtube:1475959770371325962>" if p_val == "youtube" else "<:twitch:1475959787475697697>"
-                await logs_channel.send(f"🗑️ {interaction.user.mention} a supprimé la notification {emoji} avec l'ID `{notif_id}`.")
+            emoji = "<:youtube:1475959770371325962>" if p_val == "youtube" else "<:twitch:1475959787475697697>"
+            discord_msg = f"🗑️ {interaction.user.mention} a supprimé la notification {emoji} avec l'ID `{notif_id}`."
+            await send_log(
+                self.bot, interaction.guild.id,
+                message=discord_msg,
+                user=str(interaction.user),
+                action=f"remove_notif {p_val} → ID {notif_id} sur {interaction.guild.name}"
+            )
         else:
             await interaction.response.send_message(f"⚠️ Aucune notification **{p_val}** trouvée avec l'ID `{notif_id}`.", ephemeral=True)
+
+    @app_commands.command(
+        name="list_notif",
+        description="Liste les notifications YouTube et Twitch de ce serveur"
+    )
+    @app_commands.default_permissions(administrator=True)
+    async def list_notif(self, interaction: discord.Interaction):
+        guild_id = str(interaction.guild.id)
+        rows = astero_db.get_notifs_for_guild(guild_id)
+        if not rows:
+            await interaction.response.send_message(
+                "📭 Aucune notification configurée sur ce serveur.",
+                ephemeral=True
+            )
+            return
+        yt_blocks = []
+        tw_blocks = []
+        for notif_id, type_, salon_id, identifiant, role in rows:
+            salon = f"<#{salon_id}>"
+            role_txt = (
+                "@everyone" if role == "everyone"
+                else "Aucun rôle" if not role
+                else f"<@&{role}>"
+            )
+            block = (
+                f"**{notif_id}** : `{identifiant}`\n"
+                f"{salon} • {role_txt}"
+            )
+            if type_ == "YouTube":
+                yt_blocks.append(block)
+            else:
+                tw_blocks.append(block)
+        def build_section(title, blocks, emoji):
+            if not blocks:
+                return f"_Aucune notification {title.lower()}_"
+            return (
+                f"**{emoji} {title.upper()}**\n"
+                "══════════════════\n"
+                + "\n────────────\n".join(blocks)
+            )
+        embed = discord.Embed(
+            title="📢 Notifications du serveur",
+            color=discord.Color.orange()
+        )
+        embed.add_field(
+            name="══════════════════",
+            value=build_section("YouTube", yt_blocks, "📺"),
+            inline=False
+        )
+        embed.add_field(
+            name="══════════════════",
+            value=build_section("Twitch", tw_blocks, "🎮"),
+            inline=False
+        )
+        embed.set_footer(
+            text="Suppression : /remove_notif <youtube|twitch> <id>"
+        )
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot):
     cog = NotifsCog(bot)

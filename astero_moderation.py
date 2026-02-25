@@ -5,7 +5,7 @@ from discord import app_commands
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
 import astero_db
-from astero_logs import get_logs
+from astero_logs import get_logs, send_log
 
 mots_interdits = [
     "abruti", "fdp", "pute", "salope", "batard", "ntm", "enculé", "connard",
@@ -34,17 +34,22 @@ class ModerationCog(commands.Cog):
                     f"🚫 {message.author.display_name}, tu ne peux pas dire ça ici.",
                     delete_after=5
                 )
+                embed = discord.Embed(
+                    title="Mot interdit détecté",
+                    description=f"**Utilisateur:** {message.author.mention}\n**Salon:** {message.channel.mention}\n**Message:** {message.content}",
+                    color=discord.Color.red()
+                )
                 logs_channel = get_logs(self.bot, message.guild.id)
                 if logs_channel:
-                    embed = discord.Embed(
-                        title="Mot interdit détecté",
-                        description=f"**Utilisateur:** {message.author.mention}\n**Salon:** {message.channel.mention}\n**Message:** {message.content}",
-                        color=discord.Color.red()
-                    )
                     await logs_channel.send(embed=embed)
+                from astero_logs import log_action
+                log_action(
+                    str(message.author),
+                    f"Mot interdit dans #{message.channel.name} sur {message.guild.name} : {message.content}"
+                )
             except discord.Forbidden:
                 pass
-            return # On s'arrête si le message est déjà supprimé
+            return
 
         # --- 2. FILTRE DE CONTENU OBLIGATOIRE (Système de Filtres) ---
         required_text = astero_db.get_filter_for_channel(message.channel.id)
@@ -60,7 +65,17 @@ class ModerationCog(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def filter_add(self, interaction: discord.Interaction, salon: discord.TextChannel, texte: str):
         astero_db.add_channel_filter(interaction.guild.id, salon.id, texte)
-        await interaction.response.send_message(f"✅ Filtre configuré : les messages dans {salon.mention} devront contenir `{texte}`.", ephemeral=True)
+        discord_msg = f"🔧 {interaction.user.mention} a ajouté un filtre sur {salon.mention} : `{texte}`."
+        await send_log(
+            self.bot, interaction.guild.id,
+            message=discord_msg,
+            user=str(interaction.user),
+            action=f"filter_add → #{salon.name} ({salon.id}) filtre='{texte}' sur {interaction.guild.name}"
+        )
+        await interaction.response.send_message(
+            f"✅ Filtre configuré : les messages dans {salon.mention} devront contenir `{texte}`.",
+            ephemeral=True
+        )
 
     @app_commands.command(name="filter_list", description="Liste les filtres de salon actifs")
     @app_commands.default_permissions(administrator=True)
@@ -68,7 +83,7 @@ class ModerationCog(commands.Cog):
         rows = astero_db.get_filters(interaction.guild.id)
         if not rows:
             return await interaction.response.send_message("Aucun filtre n'est configuré sur ce serveur.", ephemeral=True)
-        
+
         txt = "**Filtres de salon actifs :**\n"
         for fid, sid, texte in rows:
             txt += f"ID: `{fid}` | <#{sid}> -> `{texte}`\n"
@@ -78,6 +93,13 @@ class ModerationCog(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def filter_remove(self, interaction: discord.Interaction, filter_id: int):
         if astero_db.delete_filter(interaction.guild.id, filter_id):
+            discord_msg = f"🗑️ {interaction.user.mention} a supprimé le filtre ID `{filter_id}`."
+            await send_log(
+                self.bot, interaction.guild.id,
+                message=discord_msg,
+                user=str(interaction.user),
+                action=f"filter_remove → ID {filter_id} sur {interaction.guild.name}"
+            )
             await interaction.response.send_message(f"✅ Filtre `{filter_id}` supprimé avec succès.", ephemeral=True)
         else:
             await interaction.response.send_message("⚠️ ID de filtre introuvable.", ephemeral=True)
@@ -90,19 +112,24 @@ class ModerationCog(commands.Cog):
         if not interaction.channel: return
         await interaction.response.defer(ephemeral=True)
         try:
-            logs_channel = get_logs(self.bot, interaction.guild.id)
             if nombre is not None:
                 if nombre < 1:
                     await interaction.followup.send("Le nombre doit être > 0.", ephemeral=True)
                     return
                 deleted = await interaction.channel.purge(limit=nombre)
-                await interaction.followup.send(f"🗑️ {len(deleted)} messages supprimés.", ephemeral=True)
+                reply = f"🗑️ {len(deleted)} messages supprimés."
             else:
                 deleted = await interaction.channel.purge()
-                await interaction.followup.send("🗑️ Salon purgé.", ephemeral=True)
-            
-            if logs_channel:
-                await logs_channel.send(f"🗑️ **Clear** : {interaction.user.mention} a supprimé des messages dans {interaction.channel.mention}.")
+                reply = "🗑️ Salon purgé."
+
+            await interaction.followup.send(reply, ephemeral=True)
+            discord_msg = f"🗑️ **Clear** : {interaction.user.mention} a supprimé {len(deleted)} message(s) dans {interaction.channel.mention}."
+            await send_log(
+                self.bot, interaction.guild.id,
+                message=discord_msg,
+                user=str(interaction.user),
+                action=f"clear → {len(deleted)} messages dans #{interaction.channel.name} sur {interaction.guild.name}"
+            )
         except Exception as e:
             await interaction.followup.send(f"❌ Erreur : {e}", ephemeral=True)
 
@@ -116,12 +143,17 @@ class ModerationCog(commands.Cog):
         unban_time = int((datetime.now(timezone.utc) + timedelta(days=jours)).timestamp())
         try: await membre.send(f"Tu as été banni de {interaction.guild.name} pour {jours} jours.")
         except: pass
-        
+
         await membre.ban(reason=f"Ban temporaire ({jours}j) par {interaction.user.display_name}")
         astero_db.save_temp_ban(interaction.guild.id, membre.id, unban_time)
-        
-        logs_channel = get_logs(self.bot, interaction.guild.id)
-        if logs_channel: await logs_channel.send(f"⛔ {membre.mention} banni temporairement ({jours}j).")
+
+        discord_msg = f"⛔ {membre.mention} banni temporairement ({jours}j) par {interaction.user.mention}."
+        await send_log(
+            self.bot, interaction.guild.id,
+            message=discord_msg,
+            user=str(interaction.user),
+            action=f"atban → {membre} ({membre.id}) pour {jours}j sur {interaction.guild.name}"
+        )
         await interaction.response.send_message(f"✅ {membre.mention} banni pour {jours} jours.", ephemeral=True)
 
     # === Commande /awarn (Alerte) ===
@@ -130,18 +162,29 @@ class ModerationCog(commands.Cog):
     async def awarn(self, interaction: discord.Interaction, member: discord.Member):
         astero_db.add_warn(member.id)
         total_warns = astero_db.count_warns(member.id)
-        logs_channel = get_logs(self.bot, interaction.guild.id)
-        
+
         try: await member.send(f"⚠️ Alerte sur **{interaction.guild.name}** ({total_warns}/4)")
         except: pass
-        
-        if logs_channel: await logs_channel.send(f"⚠️ {member.mention} a reçu une alerte ({total_warns}/4)")
+
+        discord_msg = f"⚠️ {member.mention} a reçu une alerte ({total_warns}/4) de {interaction.user.mention}."
+        await send_log(
+            self.bot, interaction.guild.id,
+            message=discord_msg,
+            user=str(interaction.user),
+            action=f"awarn → {member} ({member.id}) warn {total_warns}/4 sur {interaction.guild.name}"
+        )
         await interaction.response.send_message(f"✅ Alerte donnée à {member.mention}.", ephemeral=True)
 
         if total_warns >= 4:
             await member.ban(reason="4 alertes atteintes")
             astero_db.add_to_bans(member.id, raison="Ban automatique (4 warns)")
-            if logs_channel: await logs_channel.send(f"⛔ {member.mention} banni (seuil d'alertes atteint).")
+            discord_msg2 = f"⛔ {member.mention} banni automatiquement (seuil de 4 alertes atteint)."
+            await send_log(
+                self.bot, interaction.guild.id,
+                message=discord_msg2,
+                user="Système",
+                action=f"auto-ban → {member} ({member.id}) sur {interaction.guild.name} (4 warns)"
+            )
 
     # === Commande /aban (Ban Définitif) ===
     @app_commands.command(name="aban", description="Bannir un membre")
@@ -151,9 +194,14 @@ class ModerationCog(commands.Cog):
         except: pass
         await member.ban(reason=f"Banni par {interaction.user.display_name}")
         astero_db.add_to_bans(member.id, raison="Banni par modérateur")
-        
-        logs_channel = get_logs(self.bot, interaction.guild.id)
-        if logs_channel: await logs_channel.send(f"⛔ {member.mention} banni définitivement.")
+
+        discord_msg = f"⛔ {member.mention} banni définitivement par {interaction.user.mention}."
+        await send_log(
+            self.bot, interaction.guild.id,
+            message=discord_msg,
+            user=str(interaction.user),
+            action=f"aban → {member} ({member.id}) sur {interaction.guild.name}"
+        )
         await interaction.response.send_message(f"✅ {member.mention} banni.", ephemeral=True)
 
     # === Commande /akick (Expulsion) ===
@@ -163,9 +211,14 @@ class ModerationCog(commands.Cog):
         try: await member.send(f"Tu as été expulsé de {interaction.guild.name}.")
         except: pass
         await member.kick(reason=f"Expulsé par {interaction.user.display_name}")
-        
-        logs_channel = get_logs(self.bot, interaction.guild.id)
-        if logs_channel: await logs_channel.send(f"🚪 {member.mention} expulsé.")
+
+        discord_msg = f"🚪 {member.mention} expulsé par {interaction.user.mention}."
+        await send_log(
+            self.bot, interaction.guild.id,
+            message=discord_msg,
+            user=str(interaction.user),
+            action=f"akick → {member} ({member.id}) sur {interaction.guild.name}"
+        )
         await interaction.response.send_message(f"✅ {member.mention} expulsé.", ephemeral=True)
 
     # === Tâche de fond : Bans Globaux ===

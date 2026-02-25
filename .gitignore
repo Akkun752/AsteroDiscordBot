@@ -4,3 +4,5 @@
 __pycache__/
 last_videos.json
 temp_bans.json
+save/
+files.zip
