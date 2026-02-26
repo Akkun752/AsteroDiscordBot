@@ -21,7 +21,7 @@ from astero_logs import log_action, send_log
 load_dotenv()
 
 # Configuration
-VERSION = "v4.2.3"
+VERSION = "v4.2.4"
 print(f"Lancement du bot Astero {VERSION}...")
 
 # --- Configuration du dossier de Logs ---

@@ -172,5 +172,3 @@ class NotifsCog(commands.Cog):
 async def setup(bot):
     cog = NotifsCog(bot)
     await bot.add_cog(cog)
-    bot.loop.create_task(cog.check_youtube())
-    bot.loop.create_task(cog.check_twitch())
