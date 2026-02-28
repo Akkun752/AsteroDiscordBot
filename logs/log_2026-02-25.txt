@@ -1,4 +1,0 @@
-[2026-02-25 : 17:14:51] akkun752 a fait : add_notif Twitch → identifiant='akkun752', salon=#⚔️-astero-beta, role=aucun sur Akkun Crashtest
-[2026-02-25 : 17:15:38] akkun752 a fait : remove_notif twitch → ID 19 sur Akkun Crashtest
-[2026-02-25 : 17:15:45] akkun752 a fait : remove_notif twitch → ID 23 sur Akkun Crashtest
-[2026-02-25 : 18:02:26] Système a fait : Notification YouTube envoyée : UNE VILLE PLONGÉE DANS l'HORREUR !! | #2 | Reanimal (https://www.youtube.com/watch?v=fX3RcYDR8f0)
