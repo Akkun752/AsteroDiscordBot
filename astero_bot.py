@@ -21,8 +21,8 @@ from astero_logs import log_action, send_log
 load_dotenv()
 
 # Configuration
-VERSION = "v4.2.5"
-NOTIF_DELAY = 30
+VERSION = "v4.2.6"
+NOTIF_DELAY = 60
 print(f"Lancement du bot Astero {VERSION}...")
 
 # --- Configuration du dossier de Logs ---

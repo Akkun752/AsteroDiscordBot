@@ -1,17 +1,29 @@
 import pymysql
 import os
 from dotenv import load_dotenv
+from dbutils.pooled_db import PooledDB
 
 load_dotenv()
 
+_pool = PooledDB(
+    creator=pymysql,
+    maxconnections=5,   # max connexions simultanées
+    mincached=2,        # connexions maintenues ouvertes en permanence
+    maxcached=5,        # max connexions en cache
+    maxusage=500,       # recrée une connexion après 500 utilisations
+    blocking=True,      # attend si toutes les connexions sont occupées
+    host=os.getenv("DB_IP"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWD"),
+    database=os.getenv("DB_DB"),
+    cursorclass=pymysql.cursors.Cursor,
+    autocommit=False,
+)
+
 def get_connection():
-    return pymysql.connect(
-        host=os.getenv("DB_IP"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWD"),
-        database=os.getenv("DB_DB"),
-        cursorclass=pymysql.cursors.Cursor
-    )
+    """Emprunte une connexion depuis le pool (remise à dispo au .close())."""
+    return _pool.connection()
+
 
 def insert_astero_yt(id_serveur, id_salon, lien_chaine, id_role=None):
     conn = get_connection()
