@@ -8,7 +8,7 @@ load_dotenv()
 _pool = PooledDB(
     creator=pymysql,
     maxconnections=5,   # max connexions simultanées
-    mincached=2,        # connexions maintenues ouvertes en permanence
+    mincached=0,  # pas de connexion au démarrage        # connexions maintenues ouvertes en permanence
     maxcached=5,        # max connexions en cache
     maxusage=500,       # recrée une connexion après 500 utilisations
     blocking=True,      # attend si toutes les connexions sont occupées
