@@ -228,22 +228,22 @@ class ModerationCog(commands.Cog):
         await interaction.response.send_message(f"✅ {member.mention} expulsé.", ephemeral=True)
 
     # === Tâche de fond : Bans Globaux ===
-    async def check_global_bans(self):
-        await self.bot.wait_until_ready()
-        while True:
-            bans = astero_db.get_all_bans()
-            for guild in self.bot.guilds:
-                for ban_entry in bans:
-                    member_id = int(ban_entry["id_membre"])
-                    member = guild.get_member(member_id)
-                    if member:
-                        try:
-                            await member.ban(reason="Ban global détecté")
-                        except:
-                            pass
-            await asyncio.sleep(300)
+    #async def check_global_bans(self):
+    #    await self.bot.wait_until_ready()
+    #    while True:
+    #        bans = astero_db.get_all_bans()
+    #        for guild in self.bot.guilds:
+    #            for ban_entry in bans:
+    #                member_id = int(ban_entry["id_membre"])
+    #                member = guild.get_member(member_id)
+    #                if member:
+    #                    try:
+    #                        await member.ban(reason="Ban global détecté")
+    #                    except:
+    #                        pass
+    #        await asyncio.sleep(300)
 
 async def setup(bot):
     cog = ModerationCog(bot)
     await bot.add_cog(cog)
-    bot.loop.create_task(cog.check_global_bans())
+    #bot.loop.create_task(cog.check_global_bans())

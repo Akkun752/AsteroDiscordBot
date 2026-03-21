@@ -21,7 +21,7 @@ from astero_logs import log_action, send_log
 load_dotenv()
 
 # Configuration
-VERSION = "v4.2.7"
+VERSION = "v4.3.1"
 NOTIF_DELAY = 60
 print(f"Lancement du bot Astero {VERSION}...")
 
@@ -53,6 +53,12 @@ async def check_youtube():
                     for salon_id, role in targets:
                         salon = bot.get_channel(salon_id)
                         if not salon:
+                            continue
+                        # Vérifier le filtre de salon : si la notif ne contient pas le texte requis, on ne l'envoie pas (évite le ping fantôme)
+                        required_text = astero_db.get_filter_for_channel(salon_id)
+                        notif_content = f"{entry.title}\n{entry.link}".lower()
+                        if required_text and required_text.lower() not in notif_content:
+                            print(f"[YouTube] Notif ignorée dans le salon {salon_id} : le contenu ne correspond pas au filtre '{required_text}'.")
                             continue
                         if role == "everyone":
                             mention = "||@everyone||\n"
@@ -148,6 +154,12 @@ async def check_twitch():
                         for salon_id, role in targets:
                             salon = bot.get_channel(salon_id)
                             if not salon:
+                                continue
+                            # Vérifier le filtre de salon : si la notif ne contient pas le texte requis, on ne l'envoie pas (évite le ping fantôme)
+                            required_text = astero_db.get_filter_for_channel(salon_id)
+                            notif_content = f"{title}\n{twitch_url}".lower()
+                            if required_text and required_text.lower() not in notif_content:
+                                print(f"[Twitch] Notif ignorée dans le salon {salon_id} : le contenu ne correspond pas au filtre '{required_text}'.")
                                 continue
                             if role == "everyone":
                                 mention = "||@everyone||\n"
