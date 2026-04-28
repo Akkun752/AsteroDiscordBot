@@ -66,6 +66,8 @@ class LogsCog(commands.Cog):
 
     # === Commande /logs_set ===
     @app_commands.command(name="logs_set", description="Définit le salon de logs de ce serveur")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     @app_commands.describe(salon="Salon où envoyer les logs")
     async def logs_set(self, interaction: discord.Interaction, salon: discord.TextChannel):
@@ -91,6 +93,8 @@ class LogsCog(commands.Cog):
 
     # === Commande /logs_remove ===
     @app_commands.command(name="logs_remove", description="Supprime le salon de logs de ce serveur")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def logs_remove(self, interaction: discord.Interaction):
         if not interaction.guild:

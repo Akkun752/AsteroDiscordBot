@@ -21,7 +21,7 @@ from astero_logs import log_action, send_log
 load_dotenv()
 
 # Configuration
-VERSION = "v4.3.1"
+VERSION = "v4.3.2"
 NOTIF_DELAY = 60
 print(f"Lancement du bot Astero {VERSION}...")
 
@@ -198,7 +198,11 @@ class MyBot(commands.Bot):
 
         # Lancement de la boucle de changement de statut
         self.change_status.start()
-        await self.tree.sync()
+
+        # Sync propre : on efface le cache global puis on resynchronise tout
+        await self.tree.clear_commands(guild=None)
+        synced = await self.tree.sync()
+        print(f"Commandes synchronisées : {len(synced)}")
 
     # --- Tâche de changement de statut (toutes les 10 secondes) ---
     @tasks.loop(seconds=10)
@@ -232,11 +236,6 @@ bot = MyBot(command_prefix="!", intents=discord.Intents.all())
 @bot.event
 async def on_ready():
     print(f"Bot en route ! Connecté sur {len(bot.guilds)} serveurs.")
-    try:
-        synced = await bot.tree.sync()
-        print(f"Commandes synchronisées : {len(synced)}")
-    except Exception as e:
-        print(f"Erreur de synchronisation : {e}")
 
 
 # === Événement quand un membre rejoint ===

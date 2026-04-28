@@ -83,6 +83,8 @@ class RoleReactsCog(commands.Cog):
 
     # === Commande /add_role_react ===
     @app_commands.command(name="add_role_react", description="Associe un emoji sur un message à un rôle")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     @app_commands.describe(
         message_id="ID du message de réaction",
@@ -128,6 +130,8 @@ class RoleReactsCog(commands.Cog):
 
     # === Commande /list_role_react ===
     @app_commands.command(name="list_role_react", description="Liste les role reacts de ce serveur")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def list_role_react(self, interaction: discord.Interaction):
         if not interaction.guild:
@@ -155,6 +159,8 @@ class RoleReactsCog(commands.Cog):
 
     # === Commande /remove_role_react ===
     @app_commands.command(name="remove_role_react", description="Supprime un role react de ce serveur")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     @app_commands.describe(react_id="ID du role react à supprimer (visible via /list_role_react)")
     async def remove_role_react(self, interaction: discord.Interaction, react_id: int):

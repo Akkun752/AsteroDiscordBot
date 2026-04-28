@@ -12,6 +12,8 @@ class WelcomeCog(commands.Cog):
 
     # === Commande /welcome_set ===
     @app_commands.command(name="welcome_set", description="Définit le salon de bienvenue de ce serveur")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     @app_commands.describe(salon="Salon où envoyer les messages de bienvenue")
     async def welcome_set(self, interaction: discord.Interaction, salon: discord.TextChannel):
@@ -34,6 +36,8 @@ class WelcomeCog(commands.Cog):
 
     # === Commande /welcome_remove ===
     @app_commands.command(name="welcome_remove", description="Supprime le salon de bienvenue de ce serveur")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def welcome_remove(self, interaction: discord.Interaction):
         if not interaction.guild:

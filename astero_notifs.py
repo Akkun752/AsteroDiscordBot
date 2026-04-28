@@ -17,6 +17,8 @@ class NotifsCog(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="add_notif", description="Ajoute une notification YouTube ou Twitch")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     @app_commands.describe(
         type="Plateforme (YouTube ou Twitch)",
@@ -80,6 +82,8 @@ class NotifsCog(commands.Cog):
         )
 
     @app_commands.command(name="remove_notif", description="Supprime une notification YouTube ou Twitch")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     @app_commands.describe(plateforme="youtube ou twitch", notif_id="ID de la notification à supprimer")
     @app_commands.choices(plateforme=[
@@ -115,6 +119,8 @@ class NotifsCog(commands.Cog):
         name="list_notif",
         description="Liste les notifications YouTube et Twitch de ce serveur"
     )
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def list_notif(self, interaction: discord.Interaction):
         guild_id = str(interaction.guild.id)

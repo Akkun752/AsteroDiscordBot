@@ -62,6 +62,8 @@ class ModerationCog(commands.Cog):
 
     # === Commandes de Gestion des Filtres ===
     @app_commands.command(name="add_filter", description="Force un texte obligatoire dans un salon")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def add_filter(self, interaction: discord.Interaction, salon: discord.TextChannel, texte: str):
         astero_db.add_channel_filter(interaction.guild.id, salon.id, texte)
@@ -78,6 +80,8 @@ class ModerationCog(commands.Cog):
         )
 
     @app_commands.command(name="list_filter", description="Liste les filtres de salon actifs")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def list_filter(self, interaction: discord.Interaction):
         guild_id = interaction.guild.id
@@ -96,6 +100,8 @@ class ModerationCog(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="remove_filter", description="Supprime un filtre de salon via son ID")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def remove_filter(self, interaction: discord.Interaction, filter_id: int):
         if astero_db.delete_filter(interaction.guild.id, filter_id):
@@ -112,6 +118,8 @@ class ModerationCog(commands.Cog):
 
     # === Commande /clear ===
     @app_commands.command(name="clear", description="Supprime des messages dans ce salon")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     @app_commands.describe(nombre="Nombre de messages à supprimer (laisser vide pour tout supprimer)")
     async def clear(self, interaction: discord.Interaction, nombre: int = None):
@@ -141,6 +149,8 @@ class ModerationCog(commands.Cog):
 
     # === Commande /atban (Ban Temporaire) ===
     @app_commands.command(name="atban", description="Bannir un membre temporairement")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def atban(self, interaction: discord.Interaction, membre: discord.Member, jours: int):
         if jours <= 0:
@@ -164,6 +174,8 @@ class ModerationCog(commands.Cog):
 
     # === Commande /awarn (Alerte) ===
     @app_commands.command(name="awarn", description="Alerte un membre")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def awarn(self, interaction: discord.Interaction, member: discord.Member):
         astero_db.add_warn(member.id)
@@ -194,6 +206,8 @@ class ModerationCog(commands.Cog):
 
     # === Commande /aban (Ban Définitif) ===
     @app_commands.command(name="aban", description="Bannir un membre")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def aban(self, interaction: discord.Interaction, member: discord.Member):
         try: await member.send(f"Tu as été banni de {interaction.guild.name}.")
@@ -212,6 +226,8 @@ class ModerationCog(commands.Cog):
 
     # === Commande /akick (Expulsion) ===
     @app_commands.command(name="akick", description="Expulser un membre")
+    @app_commands.allowed_installs(guilds=True, users=False)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def akick(self, interaction: discord.Interaction, member: discord.Member):
         try: await member.send(f"Tu as été expulsé de {interaction.guild.name}.")
