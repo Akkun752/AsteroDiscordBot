@@ -2,11 +2,6 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-_guild_only = [
-    app_commands.allowed_installs(guilds=True, users=False),
-    app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False),
-]
-
 
 class CommandsCog(commands.Cog):
     def __init__(self, bot):
@@ -14,8 +9,6 @@ class CommandsCog(commands.Cog):
 
     # === Commande /help ===
     @app_commands.command(name="help", description="Affiche toutes les commandes du bot")
-    @app_commands.allowed_installs(guilds=True, users=False)
-    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def help_command(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="Centre d'aide d'Astero",
@@ -51,8 +44,6 @@ class CommandsCog(commands.Cog):
 
     # === Commande /embed ===
     @app_commands.command(name="embed", description="Créer un Embed")
-    @app_commands.allowed_installs(guilds=True, users=False)
-    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     @app_commands.default_permissions(administrator=True)
     async def embed_cmd(self, interaction: discord.Interaction, titre: str, desc: str, soustitre: str, contenu: str):
         embed = discord.Embed(title=titre, description=desc, color=discord.Color.orange())
@@ -61,15 +52,11 @@ class CommandsCog(commands.Cog):
 
     # === Commande /say ===
     @app_commands.command(name="say", description="Faire parler le bot")
-    @app_commands.allowed_installs(guilds=True, users=False)
-    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def say(self, interaction: discord.Interaction, msg: str):
         await interaction.response.send_message(msg)
 
     # === Commande /akkun ===
     @app_commands.command(name="akkun", description="Affiche les chaînes Akkun7")
-    @app_commands.allowed_installs(guilds=True, users=False)
-    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def akkun(self, interaction: discord.Interaction):
         embed = discord.Embed(title="Akkun",description="**Voici les chaînes de Akkun :**",color=discord.Color.orange())
         embed.set_thumbnail(url="https://www.akkunverse.fr/astero/akkun.png")
@@ -81,8 +68,6 @@ class CommandsCog(commands.Cog):
 
     # === Commande /falnix ===
     @app_commands.command(name="falnix", description="Affiche les chaînes Falnix")
-    @app_commands.allowed_installs(guilds=True, users=False)
-    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def falnix(self, interaction: discord.Interaction):
         embed = discord.Embed(title="Falnix",description="**Voici les chaînes de Falnix :**",color=discord.Color.orange())
         embed.set_thumbnail(url="https://www.akkunverse.fr/astero/falnix.png")
@@ -94,8 +79,6 @@ class CommandsCog(commands.Cog):
 
     # === Commande /saphira ===
     @app_commands.command(name="saphira", description="Affiche le serveur de Saphira")
-    @app_commands.allowed_installs(guilds=True, users=False)
-    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def saphira(self, interaction: discord.Interaction):
         embed = discord.Embed(title="Saphira",description="**Voici les différents liens de Saphira :**",color=discord.Color.orange())
         embed.set_thumbnail(url="https://www.akkunverse.fr/astero/saphira.png")
@@ -105,8 +88,6 @@ class CommandsCog(commands.Cog):
     
     # === Commande /panel ===
     @app_commands.command(name="panel", description="Affiche les liens d'Astero")
-    @app_commands.allowed_installs(guilds=True, users=False)
-    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
     async def panel(self, interaction: discord.Interaction):
         embed = discord.Embed(title="Astero",description="**Voici les différents liens d'Astero:**",color=discord.Color.orange())
         embed.set_thumbnail(url="https://www.akkunverse.fr/astero/AsteroDiscordBot.png")

@@ -21,7 +21,7 @@ from astero_logs import log_action, send_log
 load_dotenv()
 
 # Configuration
-VERSION = "v4.3.2"
+VERSION = "v4.3.2-2"
 NOTIF_DELAY = 60
 print(f"Lancement du bot Astero {VERSION}...")
 
@@ -186,9 +186,12 @@ class MyBot(commands.Bot):
         self.log_action = log_action
 
     async def setup_hook(self):
+        # 1. Lancer les tâches de fond
         self.loop.create_task(check_youtube())
         self.loop.create_task(check_twitch())
-        # Chargement des modules (Cogs)
+        
+        # 2. Charger les modules (Cogs)
+        # Assure-toi que chaque module utilise bien commands.Cog
         await astero_notifs.setup(self)
         await astero_moderation.setup(self)
         await astero_commands.setup(self)
@@ -196,13 +199,25 @@ class MyBot(commands.Bot):
         await astero_rolereacts.setup(self)
         await astero_logs.setup(self)
 
-        # Lancement de la boucle de changement de statut
-        self.change_status.start()
+        # 3. Autoriser l'installation sur le compte utilisateur (comme Wordle)
+        for cmd in self.tree.walk_commands():
+            if isinstance(cmd, app_commands.Command):
+                # Permet l'installation sur un serveur ET sur un compte utilisateur
+                cmd.allowed_installs = app_commands.AppInstallationType(guild=True, user=True)
+                
+                # Permet l'utilisation sur les serveurs, en DM, et sur les serveurs tiers
+                cmd.allowed_contexts = app_commands.AppCommandContext(
+                    guild=True, 
+                    dm_channel=True, 
+                    private_channel=True
+                )
 
-        # Sync propre : on efface le cache global puis on resynchronise tout
-        await self.tree.clear_commands(guild=None)
+        # 4. Synchronisation
+        print("Synchronisation des commandes en cours...")
         synced = await self.tree.sync()
         print(f"Commandes synchronisées : {len(synced)}")
+
+        self.change_status.start()
 
     # --- Tâche de changement de statut (toutes les 10 secondes) ---
     @tasks.loop(seconds=10)
