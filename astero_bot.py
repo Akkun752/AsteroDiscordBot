@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from discord import app_commands
 from discord.ext import commands, tasks
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import asyncio
 import feedparser
 import aiohttp
@@ -21,7 +21,7 @@ from astero_logs import log_action, send_log
 load_dotenv()
 
 # Configuration
-VERSION = "v4.3.2-2"
+VERSION = "v4.3.3"
 NOTIF_DELAY = 60
 print(f"Lancement du bot Astero {VERSION}...")
 
@@ -75,6 +75,16 @@ async def check_youtube():
         except Exception as e:
             print(f"[YouTube] Erreur globale : {e}")
         await asyncio.sleep(NOTIF_DELAY)
+
+async def get_last_message(salon):
+    """Retourne le dernier message envoyé dans le salon, ou None."""
+    try:
+        async for msg in salon.history(limit=1):
+            return msg
+    except Exception as e:
+        print(f"[Twitch] Impossible de lire l'historique de #{getattr(salon, 'name', salon)} : {e}")
+    return None
+
 
 async def check_twitch():
     await bot.wait_until_ready()
@@ -167,7 +177,18 @@ async def check_twitch():
                                 mention = ""
                             else:
                                 mention = f"||<@&{role}>||\n"
-                            await salon.send(f"{mention}# {title}", embed=embed)
+                            message_text = f"{mention}# {title}"
+
+                            # Anti-doublon : si le dernier message du salon a exactement le même texte
+                            # et date de moins de 6h, on ne poste pas dans ce salon.
+                            last_msg = await get_last_message(salon)
+                            if last_msg and last_msg.content == message_text:
+                                delta = datetime.now(timezone.utc) - last_msg.created_at
+                                if delta < timedelta(hours=6):
+                                    print(f"[Twitch] Notif ignorée dans le salon {salon_id} : message identique posté il y a moins de 6h.")
+                                    continue
+
+                            await salon.send(message_text, embed=embed)
                         astero_db.mark_tw_stream_posted(streamer, stream_id)
                     except Exception as e:
                         print(f"[Twitch] Erreur streamer {streamer} : {e}")
