@@ -62,7 +62,7 @@ class CommandsCog(commands.Cog):
         embed = discord.Embed(title="Akkun",description="**Voici les chaînes de Akkun :**",color=discord.Color.orange())
         embed.set_thumbnail(url="https://www.akkunverse.fr/astero/akkun.png")
         embed.add_field(name="🎥 YouTube (Akkun7)", value="https://youtube.com/@Akkun7", inline=False)
-        embed.add_field(name="📚 YouTube (MangAkkun)", value="https://youtube.com/@Akkun7", inline=False)
+        embed.add_field(name="📚 YouTube (MangAkkun)", value="https://youtube.com/@MangAkkun", inline=False)
         embed.add_field(name="🎬 YouTube (Akkun7 VOD)", value="https://youtube.com/@Akkun7VOD", inline=False)
         embed.add_field(name="👾 Twitch (akkun752)", value="https://twitch.tv/akkun752", inline=False)
         embed.add_field(name="🤖​ Discord", value="https://discord.gg/24kM8KUd9j", inline=False)
