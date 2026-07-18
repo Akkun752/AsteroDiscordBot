@@ -81,7 +81,7 @@ class CommandsCog(commands.Cog):
 
     # === Commande /falnix ===
     @app_commands.command(name="raphaaile", description="Affiche les chaînes de RaphaAile")
-    async def falnix(self, interaction: discord.Interaction):
+    async def raphaaile(self, interaction: discord.Interaction):
         embed = discord.Embed(title="RaphaAile",description="**Voici les chaînes de Falnix :**",color=discord.Color.orange())
         embed.set_thumbnail(url="https://www.akkunverse.fr/astero/raphaaile.png")
         embed.add_field(name="🎥 YouTube (RaphaAile)", value="https://youtube.com/@raphaaile", inline=False)
