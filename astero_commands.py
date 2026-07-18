@@ -16,8 +16,9 @@ class CommandsCog(commands.Cog):
             color=discord.Color.orange()
         )
         embed.add_field(name="/akkun", value="Affiche les chaînes Akkun7", inline=False)
-        embed.add_field(name="/falnix", value="Affiche les chaînes Falnix", inline=False)
+        embed.add_field(name="/falnix", value="Affiche les chaînes de Falnix", inline=False)
         embed.add_field(name="/panel", value="Affiche les liens d'Astero", inline=False)
+        embed.add_field(name="/raphaaile", value="Affiche les chaînes ce RaphaAile", inline=False)
         embed.add_field(name="/saphira", value="Affiche le serveur de Saphira", inline=False)
         embed.add_field(name="/say", value="Faire parler le bot", inline=False)
 
@@ -60,21 +61,33 @@ class CommandsCog(commands.Cog):
     async def akkun(self, interaction: discord.Interaction):
         embed = discord.Embed(title="Akkun",description="**Voici les chaînes de Akkun :**",color=discord.Color.orange())
         embed.set_thumbnail(url="https://www.akkunverse.fr/astero/akkun.png")
-        embed.add_field(name="🎥 YouTube", value="https://youtube.com/@Akkun7", inline=False)
-        embed.add_field(name="🎬 YouTube VOD", value="https://youtube.com/@Akkun7VOD", inline=False)
-        embed.add_field(name="👾 Twitch", value="https://twitch.tv/akkun752", inline=False)
+        embed.add_field(name="🎥 YouTube (Akkun7)", value="https://youtube.com/@Akkun7", inline=False)
+        embed.add_field(name="📚 YouTube (MangAkkun)", value="https://youtube.com/@Akkun7", inline=False)
+        embed.add_field(name="🎬 YouTube (Akkun7 VOD)", value="https://youtube.com/@Akkun7VOD", inline=False)
+        embed.add_field(name="👾 Twitch (akkun752)", value="https://twitch.tv/akkun752", inline=False)
         embed.add_field(name="🤖​ Discord", value="https://discord.gg/24kM8KUd9j", inline=False)
         await interaction.response.send_message(embed=embed)
 
     # === Commande /falnix ===
-    @app_commands.command(name="falnix", description="Affiche les chaînes Falnix")
+    @app_commands.command(name="falnix", description="Affiche les chaînes de Falnix")
     async def falnix(self, interaction: discord.Interaction):
         embed = discord.Embed(title="Falnix",description="**Voici les chaînes de Falnix :**",color=discord.Color.orange())
         embed.set_thumbnail(url="https://www.akkunverse.fr/astero/falnix.png")
-        embed.add_field(name="🎥 YouTube", value="https://youtube.com/@Falnix", inline=False)
-        embed.add_field(name="🎬 YouTube VOD", value="https://youtube.com/@FalnixVOD", inline=False)
-        embed.add_field(name="👾 Twitch", value="https://twitch.tv/falnix_", inline=False)
+        embed.add_field(name="🎥 YouTube (Falnix)", value="https://youtube.com/@Falnix", inline=False)
+        embed.add_field(name="🎬 YouTube (Falnix VOD)", value="https://youtube.com/@FalnixVOD", inline=False)
+        embed.add_field(name="👾 Twitch (falnix_)", value="https://twitch.tv/falnix_", inline=False)
         embed.add_field(name="🤖​ Discord", value="https://discord.gg/chez-falnix", inline=False)
+        await interaction.response.send_message(embed=embed)
+
+    # === Commande /falnix ===
+    @app_commands.command(name="raphaaile", description="Affiche les chaînes de RaphaAile")
+    async def falnix(self, interaction: discord.Interaction):
+        embed = discord.Embed(title="RaphaAile",description="**Voici les chaînes de Falnix :**",color=discord.Color.orange())
+        embed.set_thumbnail(url="https://www.akkunverse.fr/astero/raphaaile.png")
+        embed.add_field(name="🎥 YouTube (RaphaAile)", value="https://youtube.com/@raphaaile", inline=False)
+        embed.add_field(name="🎬 YouTube (RaphaAile VOD)", value="https://youtube.com/@RaphaAileVOD", inline=False)
+        embed.add_field(name="👾 Twitch (rapha_aile_)", value="https://twitch.tv/rapha_aile_", inline=False)
+        embed.add_field(name="🤖​ Discord", value="https://discord.gg/MPdqBHtBvC", inline=False)
         await interaction.response.send_message(embed=embed)
 
     # === Commande /saphira ===
